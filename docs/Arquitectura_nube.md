@@ -41,3 +41,5 @@ Se utilizó Blob Storage para almacenar archivos generados por la aplicación, d
 ## Justificación de la Arquitectura
 
 La arquitectura propuesta busca combinar disponibilidad, escalabilidad y simplicidad operativa. El uso de múltiples máquinas virtuales detrás de un balanceador de carga permite soportar una mayor cantidad de usuarios y minimizar interrupciones del servicio. Por otro lado, PostgreSQL Flexible Server y Blob Storage proporcionan servicios administrados que reducen la complejidad de administración y permiten concentrar los esfuerzos en el desarrollo de la aplicación.
+
+das
