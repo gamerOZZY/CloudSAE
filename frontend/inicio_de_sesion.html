@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión — SAE ESCOM</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* =============================================
+       1. VARIABLES CSS (Paleta de Identidad)
+       ============================================= */
+    :root {
+      --wine-dark:   #62152d;   
+      --wine-mid:    #952f57;   
+      --wine-light:  #ca668b;   
+      --black-deep:  #040404;   
+      --black-soft:  #0f0f0f;   
+
+      --surface-0:   #080306;
+      --surface-1:   #120710;
+      --surface-2:   #1c0d18;
+      --surface-3:   #2a1422;
+
+      --text-primary:   #f2e8ec;
+      --text-secondary: #c9a0b2;
+      --text-muted:     #7a5060;
+      --wine-pale:      #e8c0cf;
+
+      --border-faint:  rgba(202, 102, 139, 0.12);
+      --border-soft:   rgba(202, 102, 139, 0.25);
+      --border-strong: rgba(202, 102, 139, 0.45);
+      --glass-bg:      rgba(18, 7, 16, 0.55);
+      --glass-glow:    rgba(149, 47, 87, 0.15);
+
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --fast:   200ms;
+      --normal: 340ms;
+      --slow:   500ms;
+      --ultra-slow: 800ms;
+    }
+
+    /* =============================================
+       2. RESET & BASE
+       ============================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--black-deep);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =============================================
+       3. FONDO ANIMADO
+       ============================================= */
+    .background-wrapper {
+      position: absolute;
+      inset: -30%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 0;
+      transform: rotate(-12deg) scale(1.1);
+      pointer-events: none;
+    }
+
+    .bg-grid {
+      display: flex;
+      gap: 2vw;
+      width: 100%;
+      height: 100%;
+    }
+
+    .bg-column {
+      display: flex;
+      flex-direction: column;
+      gap: 2vw;
+      width: 25vw;
+      animation: scroll-column 40s linear infinite;
+    }
+
+    .bg-column:nth-child(even) {
+      animation-direction: reverse;
+    }
+
+    .bg-card {
+      width: 100%;
+      height: 35vh;
+      background: linear-gradient(135deg, var(--surface-2), var(--surface-0));
+      border: 1px solid var(--border-faint);
+      border-radius: 16px;
+      opacity: 0.3;
+      transition: opacity var(--slow) var(--ease);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bg-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 100% 0%, var(--wine-dark) 0%, transparent 60%);
+      opacity: 0.4;
+    }
+
+    @keyframes scroll-column {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-50%); }
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, transparent 0%, var(--black-deep) 80%);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* =============================================
+       4. INTERFAZ PRINCIPAL
+       ============================================= */
+    .main-container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      perspective: 1000px;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border-soft);
+      border-top: 1px solid var(--border-strong);
+      border-left: 1px solid var(--border-strong);
+      border-radius: 28px;
+      padding: 48px 40px;
+      box-shadow: 
+        0 40px 80px rgba(0,0,0,0.8), 
+        inset 0 0 40px var(--glass-glow);
+      
+      opacity: 0;
+      transform: translateY(40px) rotateX(10deg);
+      animation: form-enter 1s var(--ease) 0.2s forwards;
+    }
+
+    @keyframes form-enter {
+      to {
+        opacity: 1;
+        transform: translateY(0) rotateX(0);
+      }
+    }
+
+    .login-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-mark {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, var(--wine-dark), var(--wine-mid));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--wine-pale);
+      box-shadow: 0 8px 24px rgba(98, 21, 45, 0.45);
+      margin-bottom: 16px;
+    }
+
+    .login-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 36px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .login-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 300;
+      margin-top: 8px;
+    }
+
+    /* =============================================
+       5. TOGGLE DE ROL (NUEVO)
+       ============================================= */
+    .role-toggle-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 36px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-faint);
+    }
+
+    .role-label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      transition: all var(--fast) var(--ease);
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .role-label.active {
+      color: var(--wine-pale);
+      text-shadow: 0 0 8px var(--glass-glow);
+    }
+
+    /* Contenedor del interruptor */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 54px;
+      height: 28px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--surface-3);
+      transition: var(--normal);
+      border-radius: 34px;
+      border: 1px solid var(--border-strong);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 2.5px;
+      background-color: var(--text-primary);
+      transition: var(--normal) var(--ease);
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+
+    /* Estado Activo (Directivo) */
+    input:checked + .slider {
+      background-color: var(--wine-dark);
+      border-color: var(--wine-light);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(26px);
+      background-color: var(--wine-pale);
+    }
+
+    /* =============================================
+       6. FORMULARIO
+       ============================================= */
+    .form-group {
+      position: relative;
+      margin-bottom: 32px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-strong);
+      padding: 12px 0;
+      font-size: 15px;
+      color: var(--text-primary);
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+      transition: border-color var(--normal) var(--ease);
+    }
+
+    .form-input::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--wine-light);
+      transition: width var(--normal) var(--ease);
+    }
+
+    .form-label {
+      position: absolute;
+      top: 12px;
+      left: 0;
+      font-size: 15px;
+      color: var(--text-muted);
+      pointer-events: none;
+      transition: all var(--normal) var(--ease);
+    }
+
+    .form-input:focus ~ .form-label,
+    .form-input:not(:placeholder-shown) ~ .form-label {
+      top: -12px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--wine-light);
+    }
+
+    .form-input:focus {
+      border-bottom-color: var(--wine-light);
+    }
+
+    .form-options {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 36px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-group input {
+      display: none;
+    }
+
+    .custom-checkbox {
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--fast) var(--ease);
+    }
+
+    .checkbox-group input:checked + .custom-checkbox {
+      background: var(--wine-mid);
+      border-color: var(--wine-light);
+    }
+
+    .custom-checkbox svg {
+      width: 10px;
+      height: 10px;
+      stroke: var(--wine-pale);
+      stroke-width: 3;
+      fill: none;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all var(--fast) var(--ease);
+    }
+
+    .checkbox-group input:checked + .custom-checkbox svg {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .checkbox-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .forgot-link {
+      font-size: 12px;
+      color: var(--wine-light);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color var(--fast) var(--ease);
+    }
+
+    .forgot-link:hover {
+      color: var(--wine-pale);
+      text-shadow: 0 0 8px var(--glass-glow);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--wine-mid), var(--wine-dark));
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      color: var(--wine-pale);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+      transition: all var(--normal) var(--ease);
+      box-shadow: 0 8px 24px rgba(98, 21, 45, 0.3);
+    }
+
+    .btn-submit::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      transition: left var(--slow) var(--ease);
+    }
+
+    .btn-submit:hover {
+      background: linear-gradient(135deg, var(--wine-light), var(--wine-mid));
+      color: var(--black-deep);
+      box-shadow: 0 12px 32px rgba(202, 102, 139, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-submit:hover::before {
+      left: 100%;
+    }
+
+    .btn-submit:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .btn-submit.loading {
+      color: transparent;
+      pointer-events: none;
+    }
+
+    .btn-submit.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 20px; height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: var(--wine-pale);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* =============================================
+       7. RESPONSIVE DESIGN
+       ============================================= */
+    @media (max-width: 768px) {
+      .bg-column { width: 40vw; }
+      .login-card { padding: 40px 24px; border-radius: 20px; }
+      .login-title { font-size: 30px; }
+    }
+
+    @media (max-width: 480px) {
+      .background-wrapper { transform: rotate(-5deg) scale(1.2); }
+      .bg-column { width: 60vw; }
+      .main-container { padding: 16px; }
+      .login-card { padding: 32px 20px; backdrop-filter: blur(16px); }
+      .form-options { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="background-wrapper" id="bgWrapper">
+    </div>
+  
+  <div class="overlay"></div>
+
+  <main class="main-container" id="mainContainer">
+    <div class="login-card" id="loginCard">
+      
+      <div class="login-header">
+        <div class="logo-mark">IPN</div>
+        <h1 class="login-title">Bienvenido a SAE</h1>
+        <p class="login-subtitle">Sistema de Administración Escolar</p>
+      </div>
+
+      <div class="role-toggle-container">
+        <span class="role-label active" id="labelAlumno">Alumno</span>
+        <label class="switch">
+          <input type="checkbox" id="roleToggle">
+          <span class="slider"></span>
+        </label>
+        <span class="role-label" id="labelDirectivo">Directivo</span>
+      </div>
+
+      <form id="loginForm">
+        
+        <div class="form-group">
+          <input type="text" id="username" class="form-input" placeholder=" " required autocomplete="off">
+          <label for="username" class="form-label" id="usernameLabel">Boleta o Correo Institucional</label>
+        </div>
+
+        <div class="form-group">
+          <input type="password" id="password" class="form-input" placeholder=" " required>
+          <label for="password" class="form-label">Contraseña</label>
+        </div>
+
+        <div class="form-options">
+          <label class="checkbox-group">
+            <input type="checkbox" id="remember">
+            <div class="custom-checkbox">
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <span class="checkbox-label">Recordar mis datos</span>
+          </label>
+          <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+          <span id="btnText">Iniciar Sesión →</span>
+        </button>
+
+      </form>
+
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      
+      /* 1. Generación dinámica del fondo */
+      const bgWrapper = document.getElementById('bgWrapper');
+      const columnsCount = 5;
+      const cardsPerColumn = 6; 
+      
+      const grid = document.createElement('div');
+      grid.className = 'bg-grid';
+
+      for (let i = 0; i < columnsCount; i++) {
+        const col = document.createElement('div');
+        col.className = 'bg-column';
+        
+        for (let j = 0; j < cardsPerColumn; j++) {
+          const card = document.createElement('div');
+          card.className = 'bg-card';
+          const randomHeight = Math.floor(Math.random() * (45 - 25 + 1)) + 25; 
+          card.style.height = `${randomHeight}vh`;
+          col.appendChild(card);
+        }
+        col.innerHTML += col.innerHTML; 
+        grid.appendChild(col);
+      }
+      bgWrapper.appendChild(grid);
+
+      /* 2. Parallax Suave */
+      const loginCard = document.getElementById('loginCard');
+      const mainContainer = document.getElementById('mainContainer');
+
+      mainContainer.addEventListener('mousemove', (e) => {
+        const xAxis = (window.innerWidth / 2 - e.pageX) / 40;
+        const yAxis = (window.innerHeight / 2 - e.pageY) / 40;
+        loginCard.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg) translateY(0)`;
+      });
+
+      mainContainer.addEventListener('mouseleave', () => {
+        loginCard.style.transform = `rotateY(0deg) rotateX(0deg) translateY(0)`;
+        loginCard.style.transition = `transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)`;
+      });
+
+      mainContainer.addEventListener('mouseenter', () => {
+        loginCard.style.transition = `none`;
+      });
+
+      /* 3. Lógica del Interruptor de Roles */
+      const roleToggle = document.getElementById('roleToggle');
+      const labelAlumno = document.getElementById('labelAlumno');
+      const labelDirectivo = document.getElementById('labelDirectivo');
+      const usernameLabel = document.getElementById('usernameLabel');
+      
+      // Permitir hacer clic en los textos para cambiar el switch
+      labelAlumno.addEventListener('click', () => {
+        if (roleToggle.checked) {
+          roleToggle.checked = false;
+          roleToggle.dispatchEvent(new Event('change'));
+        }
+      });
+
+      labelDirectivo.addEventListener('click', () => {
+        if (!roleToggle.checked) {
+          roleToggle.checked = true;
+          roleToggle.dispatchEvent(new Event('change'));
+        }
+      });
+
+      roleToggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          // Rol Directivo activo
+          labelAlumno.classList.remove('active');
+          labelDirectivo.classList.add('active');
+          usernameLabel.textContent = 'No. de Empleado o Correo Institucional';
+        } else {
+          // Rol Alumno activo
+          labelDirectivo.classList.remove('active');
+          labelAlumno.classList.add('active');
+          usernameLabel.textContent = 'Boleta o Correo Institucional';
+        }
+      });
+
+      /* 4. Simulación de Envío de Formulario */
+      const loginForm = document.getElementById('loginForm');
+      const submitBtn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        // Identificar el rol seleccionado
+        const role = roleToggle.checked ? 'directivo' : 'alumno';
+        const username = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+        
+        submitBtn.classList.add('loading');
+        
+        // Simular petición al servidor (2 segundos)
+        setTimeout(() => {
+          submitBtn.classList.remove('loading');
+          submitBtn.style.background = '#10b981'; 
+          submitBtn.style.borderColor = '#059669';
+          submitBtn.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.4)';
+          
+          // Mostrar mensaje de éxito según el rol
+          if(role === 'directivo') {
+            btnText.innerHTML = 'Acceso Directivo ✓';
+          } else {
+            btnText.innerHTML = 'Acceso Alumno ✓';
+          }
+          
+        }, 2000);
+      });
+
+    });
+  </script>
+</body>
+</html>
