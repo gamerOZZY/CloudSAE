@@ -1,3 +1,84 @@
+<?php
+
+session_start();
+
+if(!isset($_SESSION['id_persona'])){
+    header("Location: index.html");
+    exit();
+}
+
+require_once "conexion.php";
+
+$idAlumno = $_SESSION['id_persona'];
+$boleta = $_SESSION['boleta'];
+
+
+// DATOS PERSONALES
+
+$sql = "
+SELECT
+    a.boleta,
+    a.edad,
+    p.nombre_completo,
+    p.foto_perfil,
+    e.nombre AS escuela,
+    r.nombre AS region
+FROM Alumno a
+INNER JOIN Persona p
+    ON a.id_persona = p.id_persona
+INNER JOIN Escuela e
+    ON p.id_escuela = e.id_escuela
+INNER JOIN Region_Geografica r
+    ON e.id_region = r.id_region
+WHERE a.id_persona = ?
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$idAlumno]);
+
+$alumno = $stmt->fetch(PDO::FETCH_ASSOC);
+
+
+// MATERIAS
+
+$sql = "
+SELECT
+    m.nombre,
+    ti.grado_semestre,
+    ti.fecha_inscripcion
+FROM Tiene_Inscrita ti
+INNER JOIN Materia m
+    ON m.id_materia = ti.id_materia
+WHERE ti.id_alumno = ?
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$idAlumno]);
+
+$materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+// CALIFICACIONES
+
+$sql = "
+SELECT
+    m.nombre,
+    ti.parcial_1,
+    ti.parcial_2,
+    ti.parcial_3,
+    ti.final
+FROM Tiene_Inscrita ti
+INNER JOIN Materia m
+    ON m.id_materia = ti.id_materia
+WHERE ti.id_alumno = ?
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$idAlumno]);
+
+$calificaciones = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -371,11 +452,11 @@
       </nav>
 
       <div class="sidebar-cta">
-        <button class="btn-cta" id="ctaBook">Cerrar Sesión →</button>
+        <a href="logout.php" class="btn-cta">Cerrar sesion</a>
       </div>
     </aside>
 
-    <main class="content-area">
+    <main class="content-area">202
       <div class="content-panel" id="contentPanel" aria-live="polite">
         </div>
     </main>
@@ -385,69 +466,105 @@
     /* =============================================
        DATOS DE SECCIONES (Simulación SQL a Frontend)
        ============================================= */
-    const SECTIONS = [
-      {
-        color: 1,
-        tag: 'Registro',
-        title: 'Datos <em>personales.</em>',
-        sqlQuery: '<span>SELECT</span> boleta, nombre, curp, correo, programa, turno <span>FROM</span> alumnos <span>WHERE</span> boleta = "2023640001";',
-        type: 'profile',
-        photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80', // Placeholder de un alumno
-        data: [
-          { label: 'Boleta', value: '2023640001' },
-          { label: 'Nombre Completo', value: 'Diego Martínez Robles' },
-          { label: 'CURP', value: 'MARD010523HDFRRN09' },
-          { label: 'Correo Institucional', value: 'dmartinezr23@alumno.ipn.mx' },
-          { label: 'Programa Académico', value: 'Ingeniería en Sistemas Computacionales' },
-          { label: 'Turno', value: 'Matutino' },
-          { label: 'Situación', value: '<span style="color: #6ee7b7;">✓ Alumno Regular</span>' }
-        ]
-      },
-      {
-        color: 2,
-        tag: 'Academia',
-        title: 'Tira de <em>materias.</em>',
-        sqlQuery: '<span>SELECT</span> codigo, materia, creditos, grupo, horario <span>FROM</span> carga_academica <span>WHERE</span> boleta = "2023640001" <span>AND</span> semestre = "2024-1";',
-        type: 'table',
-        columns: ['Código', 'Materia', 'Créditos', 'Grupo', 'Horario'],
-        data: [
-          ['C01', 'Análisis de Algoritmos', '9.0', '2CM1', 'Lun-Vie 08:30 - 10:00'],
-          ['C02', 'Bases de Datos', '7.0', '2CM1', 'Lun-Vie 10:00 - 11:30'],
-          ['C03', 'Ingeniería de Software', '7.0', '2CM1', 'Lun-Vie 11:30 - 13:00'],
-          ['C04', 'Redes de Computadoras', '9.0', '2CM2', 'Lun-Vie 13:00 - 14:30'],
-          ['C05', 'Probabilidad y Estadística', '6.0', '2CM1', 'Mar-Jue 07:00 - 08:30']
-        ]
-      },
-      {
-        color: 3,
-        tag: 'Historial',
-        title: 'Reporte de <em>calificaciones.</em>',
-        sqlQuery: '<span>SELECT</span> materia, p1, p2, p3, final, extra <span>FROM</span> historial <span>WHERE</span> boleta = "2023640001";',
-        type: 'table',
-        columns: ['Materia', '1er Parcial', '2do Parcial', '3er Parcial', 'Extraordinario', 'Calificación Final'],
-        data: [
-          ['Estructuras de Datos', '8', '9', '9', '-', '<strong>9</strong>'],
-          ['Cálculo Vectorial', '10', '9', '10', '-', '<strong>10</strong>'],
-          ['Física para Informáticos', '6', '5', '7', '8', '<strong>8</strong>'],
-          ['Matemáticas Discretas', '9', '8', '9', '-', '<strong>9</strong>'],
-          ['Teoría Computacional', '7', '7', '6', '-', '<strong>7</strong>']
-        ]
-      },
-      {
-        color: 4,
-        tag: 'Sistema',
-        title: 'Acerca de <em>SAE.</em>',
-        sqlQuery: '<span>SELECT</span> version, uptime, backend, base_datos <span>FROM</span> config_sistema;',
-        type: 'table',
-        columns: ['Propiedad', 'Valor Actual', 'Estado'],
-        data: [
-          ['Versión del Sistema', 'v4.2.1-stable', 'Actualizado'],
-          ['Motor de Base de Datos', 'MySQL 8.0 / MariaDB', 'Operativo'],
-          ['Tiempo de Actividad', '142 días, 4 horas', 'Normal'],
-          ['Último respaldo', '2026-06-05 02:00 AM', 'Completado con éxito']
-        ]
-      }
-    ];
+    <?php
+
+$datosPerfil = [
+    [
+        "label" => "Boleta",
+        "value" => $alumno["boleta"]
+    ],
+    [
+        "label" => "Nombre Completo",
+        "value" => $alumno["nombre_completo"]
+    ],
+    [
+        "label" => "Edad",
+        "value" => $alumno["edad"]
+    ],
+    [
+        "label" => "Escuela",
+        "value" => $alumno["escuela"]
+    ],
+    [
+        "label" => "Region",
+        "value" => $alumno["region"]
+    ]
+];
+
+?>
+const SECTIONS = [
+
+{
+    color: 1,
+    tag: 'Registro',
+    title: 'Datos <em>personales.</em>',
+    sqlQuery: 'SELECT datos del alumno',
+    type: 'profile',
+    photo: 'https://via.placeholder.com/300x400',
+    data: <?= json_encode($datosPerfil) ?>
+},
+
+{
+    color: 2,
+    tag: 'Academia',
+    title: 'Tira de <em>materias.</em>',
+    sqlQuery: 'SELECT materias inscritas',
+    type: 'table',
+    columns: ['Materia','Semestre','Fecha Inscripción'],
+    data: <?= json_encode(
+        array_map(
+            fn($m)=>[
+                $m["nombre"],
+                $m["grado_semestre"],
+                $m["fecha_inscripcion"]
+            ],
+            $materias
+        )
+    ) ?>
+},
+
+{
+    color: 3,
+    tag: 'Historial',
+    title: 'Reporte de <em>calificaciones.</em>',
+    sqlQuery: 'SELECT calificaciones',
+    type: 'table',
+    columns: [
+        'Materia',
+        'Parcial 1',
+        'Parcial 2',
+        'Parcial 3',
+        'Final'
+    ],
+    data: <?= json_encode(
+        array_map(
+            fn($c)=>[
+                $c["nombre"],
+                $c["parcial_1"],
+                $c["parcial_2"],
+                $c["parcial_3"],
+                $c["final"]
+            ],
+            $calificaciones
+        )
+    ) ?>
+},
+
+{
+    color: 4,
+    tag: 'Sistema',
+    title: 'Acerca de <em>SAE.</em>',
+    sqlQuery: 'Información del sistema',
+    type: 'table',
+    columns: ['Propiedad','Valor'],
+    data: [
+        ['Base de Datos','Azure MySQL Flexible Server'],
+        ['Alumno','<?= $_SESSION["nombre"] ?>'],
+        ['Boleta','<?= $_SESSION["boleta"] ?>']
+    ]
+}
+
+];
 
     /* =============================================
        RENDER SECCIÓN
