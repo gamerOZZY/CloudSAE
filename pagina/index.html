@@ -145,7 +145,7 @@
 
     .login-card {
       width: 100%;
-      max-width: 440px;
+      max-width: 480px; /* Un poco más ancho para los 4 botones */
       background: var(--glass-bg);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
@@ -211,78 +211,55 @@
     }
 
     /* =============================================
-       5. TOGGLE DE ROL (NUEVO)
+       5. SELECTOR DE 4 ROLES (SEGMENTED CONTROL)
        ============================================= */
-    .role-toggle-container {
+    .role-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      background: var(--surface-3);
+      padding: 6px;
+      border-radius: 12px;
+      margin-bottom: 36px;
+      border: 1px solid var(--border-soft);
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .role-option {
+      cursor: pointer;
+      position: relative;
+    }
+
+    .role-option input {
+      display: none; /* Ocultar el radio button real */
+    }
+
+    .role-text {
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 36px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border-faint);
-    }
-
-    .role-label {
-      font-size: 13.5px;
-      color: var(--text-muted);
-      transition: all var(--fast) var(--ease);
+      padding: 10px 4px;
+      font-size: 11.5px;
       font-weight: 500;
-      cursor: pointer;
+      color: var(--text-muted);
+      border-radius: 8px;
+      transition: all var(--fast) var(--ease);
+      text-align: center;
+      user-select: none;
     }
 
-    .role-label.active {
+    /* Hover cuando no está seleccionado */
+    .role-option:hover input:not(:checked) + .role-text {
+      background: var(--surface-2);
+      color: var(--text-primary);
+    }
+
+    /* Estado Activo */
+    .role-option input:checked + .role-text {
+      background: linear-gradient(135deg, var(--wine-mid), var(--wine-dark));
       color: var(--wine-pale);
-      text-shadow: 0 0 8px var(--glass-glow);
-    }
-
-    /* Contenedor del interruptor */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 54px;
-      height: 28px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: var(--surface-3);
-      transition: var(--normal);
-      border-radius: 34px;
-      border: 1px solid var(--border-strong);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
-    }
-
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 20px;
-      width: 20px;
-      left: 3px;
-      bottom: 2.5px;
-      background-color: var(--text-primary);
-      transition: var(--normal) var(--ease);
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    }
-
-    /* Estado Activo (Directivo) */
-    input:checked + .slider {
-      background-color: var(--wine-dark);
-      border-color: var(--wine-light);
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(26px);
-      background-color: var(--wine-pale);
+      box-shadow: 0 4px 12px rgba(98, 21, 45, 0.5);
+      border: 1px solid var(--wine-light);
     }
 
     /* =============================================
@@ -484,8 +461,97 @@
       .background-wrapper { transform: rotate(-5deg) scale(1.2); }
       .bg-column { width: 60vw; }
       .main-container { padding: 16px; }
-      .login-card { padding: 32px 20px; backdrop-filter: blur(16px); }
+      .login-card { padding: 32px 16px; backdrop-filter: blur(16px); }
+      
+      /* Adaptar la cuadrícula de roles a 2 filas x 2 columnas en celulares */
+      .role-selector {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .role-text { font-size: 12px; padding: 12px 4px; }
+      
       .form-options { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+
+    /* =============================================
+       8. POPUP DE ERROR
+       ============================================= */
+    .popup-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 4, 4, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all var(--normal) var(--ease);
+      padding: 24px;
+    }
+
+    .popup-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .popup-card {
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 
+        0 40px 80px rgba(0,0,0,0.9), 
+        inset 0 0 30px var(--glass-glow);
+      transform: translateY(30px) scale(0.95);
+      transition: all var(--normal) var(--ease);
+    }
+
+    .popup-overlay.show .popup-card {
+      transform: translateY(0) scale(1);
+    }
+
+    .popup-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 24px auto;
+      background: rgba(202, 102, 139, 0.1);
+      border: 1px solid var(--wine-mid);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--wine-light);
+    }
+
+    .popup-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .popup-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 28px;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+
+    .popup-message {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -505,24 +571,34 @@
         <p class="login-subtitle">Sistema de Administración Escolar</p>
       </div>
 
-      <div class="role-toggle-container">
-        <span class="role-label active" id="labelAlumno">Alumno</span>
-        <label class="switch">
-          <input type="checkbox" id="roleToggle">
-          <span class="slider"></span>
+      <div class="role-selector">
+        <label class="role-option">
+          <input type="radio" name="role" value="alumno" checked>
+          <span class="role-text">Alumno</span>
         </label>
-        <span class="role-label" id="labelDirectivo">Directivo</span>
+        <label class="role-option">
+          <input type="radio" name="role" value="profesor">
+          <span class="role-text">Profesor</span>
+        </label>
+        <label class="role-option">
+          <input type="radio" name="role" value="gestor">
+          <span class="role-text">Gestor</span>
+        </label>
+        <label class="role-option">
+          <input type="radio" name="role" value="administrativo">
+          <span class="role-text">Administrativo</span>
+        </label>
       </div>
 
-      <form id="loginForm">
+      <form id="loginForm" action="login.php" method="POST">
         
         <div class="form-group">
-          <input type="text" id="username" class="form-input" placeholder=" " required autocomplete="off">
+          <input type="text" id="username" name="username" class="form-input" placeholder=" " required autocomplete="off">
           <label for="username" class="form-label" id="usernameLabel">Boleta o Correo Institucional</label>
         </div>
 
         <div class="form-group">
-          <input type="password" id="password" class="form-input" placeholder=" " required>
+          <input type="password" id="password" name="password" class="form-input" placeholder=" " required>
           <label for="password" class="form-label">Contraseña</label>
         </div>
 
@@ -544,7 +620,20 @@
       </form>
 
     </div>
+    <div class="popup-overlay" id="errorPopup">
+    <div class="popup-card">
+      <div class="popup-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <h2 class="popup-title">Autenticación Fallida</h2>
+      <p class="popup-message" id="errorMessage">Ha ocurrido un error al iniciar sesión.</p>
+      <button class="btn-submit" id="closePopupBtn">Intentar de nuevo</button>
+    </div>
+  </div>
   </main>
+  
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -592,74 +681,67 @@
         loginCard.style.transition = `none`;
       });
 
-      /* 3. Lógica del Interruptor de Roles */
-      const roleToggle = document.getElementById('roleToggle');
-      const labelAlumno = document.getElementById('labelAlumno');
-      const labelDirectivo = document.getElementById('labelDirectivo');
+      /* 3. Lógica del Selector de 4 Roles */
+      const roleInputs = document.querySelectorAll('input[name="role"]');
       const usernameLabel = document.getElementById('usernameLabel');
-      
-      // Permitir hacer clic en los textos para cambiar el switch
-      labelAlumno.addEventListener('click', () => {
-        if (roleToggle.checked) {
-          roleToggle.checked = false;
-          roleToggle.dispatchEvent(new Event('change'));
-        }
-      });
 
-      labelDirectivo.addEventListener('click', () => {
-        if (!roleToggle.checked) {
-          roleToggle.checked = true;
-          roleToggle.dispatchEvent(new Event('change'));
-        }
-      });
-
-      roleToggle.addEventListener('change', (e) => {
-        if (e.target.checked) {
-          // Rol Directivo activo
-          labelAlumno.classList.remove('active');
-          labelDirectivo.classList.add('active');
-          usernameLabel.textContent = 'No. de Empleado o Correo Institucional';
-        } else {
-          // Rol Alumno activo
-          labelDirectivo.classList.remove('active');
-          labelAlumno.classList.add('active');
-          usernameLabel.textContent = 'Boleta o Correo Institucional';
-        }
-      });
-
-      /* 4. Simulación de Envío de Formulario */
-      const loginForm = document.getElementById('loginForm');
-      const submitBtn = document.getElementById('submitBtn');
-      const btnText = document.getElementById('btnText');
-
-      loginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        // Identificar el rol seleccionado
-        const role = roleToggle.checked ? 'directivo' : 'alumno';
-        const username = document.getElementById('username').value;
-        const pass = document.getElementById('password').value;
-        
-        submitBtn.classList.add('loading');
-        
-        // Simular petición al servidor (2 segundos)
-        setTimeout(() => {
-          submitBtn.classList.remove('loading');
-          submitBtn.style.background = '#10b981'; 
-          submitBtn.style.borderColor = '#059669';
-          submitBtn.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.4)';
+      roleInputs.forEach(input => {
+        input.addEventListener('change', (e) => {
+          const selectedRole = e.target.value;
           
-          // Mostrar mensaje de éxito según el rol
-          if(role === 'directivo') {
-            btnText.innerHTML = 'Acceso Directivo ✓';
-          } else {
-            btnText.innerHTML = 'Acceso Alumno ✓';
+          // Cambiamos el placeholder/label flotante según quién inicie sesión
+          switch(selectedRole) {
+            case 'alumno':
+              usernameLabel.textContent = 'Boleta o Correo Institucional';
+              break;
+            case 'profesor':
+              usernameLabel.textContent = 'No. de Empleado o Correo Institucional';
+              break;
+            case 'gestor':
+              usernameLabel.textContent = 'ID de Gestor o Correo Institucional';
+              break;
+            case 'administrativo':
+              usernameLabel.textContent = 'No. de Nómina o Correo Institucional';
+              break;
           }
-          
-        }, 2000);
+        });
       });
+
+
 
     });
+    /* 4. Lógica del Popup de Errores */
+      const urlParams = new URLSearchParams(window.location.search);
+      const errorType = urlParams.get('error');
+      
+      if (errorType) {
+        const errorPopup = document.getElementById('errorPopup');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Personalizar el mensaje según el error
+        if (errorType === 'user_not_found') {
+          errorMessage.textContent = 'El usuario ingresado no existe en nuestros registros.';
+        } else if (errorType === 'wrong_password') {
+          errorMessage.textContent = 'La contraseña es incorrecta. Por favor, verifica tus datos.';
+        }
+
+        // Mostrar el popup con una pequeña pausa para la animación
+        setTimeout(() => {
+          errorPopup.classList.add('show');
+        }, 100);
+
+        // Limpiar la URL para que no vuelva a salir el popup al recargar la página
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // Cerrar el popup
+      document.getElementById('closePopupBtn').addEventListener('click', () => {
+        const errorPopup = document.getElementById('errorPopup');
+        errorPopup.classList.remove('show');
+      });
+
   </script>
+  
+
 </body>
 </html>
