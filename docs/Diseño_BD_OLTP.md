@@ -109,6 +109,122 @@ El backend restringe además que únicamente pueda modificar alumnos asociados a
 - Permiso de escritura limitado a la actualización de su fotografía de perfil.
 
 ---
+```mermaid
+erDiagram
+    %% ==========================================
+    %% 1. INFRAESTRUCTURA GEOGRÁFICA
+    %% ==========================================
+    Region_Geografica {
+        int id_region PK "AUTO_INCREMENT"
+        varchar nombre "NOT NULL"
+    }
+
+    Escuela {
+        int id_escuela PK "AUTO_INCREMENT"
+        varchar nombre "NOT NULL"
+        int id_region FK "NOT NULL"
+    }
+
+    %% ==========================================
+    %% 2. SUPERCLASE
+    %% ==========================================
+    Persona {
+        int id_persona PK "AUTO_INCREMENT"
+        varchar nombre_completo "NOT NULL"
+        varchar contrasena "NOT NULL"
+        varchar foto_perfil
+        int id_escuela FK "NOT NULL"
+    }
+
+    %% ==========================================
+    %% 3. SUBCLASES DE ROLES (Herencia 1:1)
+    %% ==========================================
+    Directivo {
+        int id_persona PK, FK
+        varchar numero_empleado "UNIQUE"
+        varchar cargo "NOT NULL"
+    }
+
+    Gestor {
+        int id_persona PK, FK
+        varchar numero_empleado "UNIQUE"
+        varchar correo "UNIQUE NOT NULL"
+    }
+
+    Profesor {
+        int id_persona PK, FK
+        varchar numero_empleado "UNIQUE"
+        varchar tipo "NOT NULL"
+    }
+
+    Alumno {
+        int id_persona PK, FK
+        varchar boleta "UNIQUE NOT NULL"
+        int edad "NOT NULL"
+    }
+
+    %% ==========================================
+    %% 4. CATÁLOGO ACADÉMICO
+    %% ==========================================
+    Materia {
+        int id_materia PK "AUTO_INCREMENT"
+        varchar nombre "NOT NULL"
+    }
+
+    %% ==========================================
+    %% 5. RELACIONES M:N Y HISTORIAL
+    %% ==========================================
+    Tiene_Inscrita {
+        int id_alumno PK, FK
+        int id_materia PK, FK
+        int grado_semestre "NOT NULL"
+        date fecha_inscripcion PK "NOT NULL"
+        date fecha_finalizacion
+        decimal parcial_1 "DEFAULT 0.0"
+        decimal parcial_2 "DEFAULT 0.0"
+        decimal parcial_3 "DEFAULT 0.0"
+        decimal final "DEFAULT 0.0"
+    }
+
+    Profesor_Imparte_Materia {
+        int id_profesor PK, FK
+        int id_materia PK, FK
+    }
+
+    %% ==========================================
+    %% 6. AUDITORÍA
+    %% ==========================================
+    Gestor_Auditoria {
+        int id_operacion PK "AUTO_INCREMENT"
+        int id_gestor FK "NOT NULL"
+        varchar entidad "CHECK ENUM"
+        int id_entidad "NOT NULL"
+        varchar accion "CHECK ENUM"
+        timestamp fecha_operacion "NOT NULL"
+    }
+
+    %% ==========================================
+    %% RELACIONES
+    %% ==========================================
+    Region_Geografica ||--o{ Escuela : "tiene"
+    Escuela ||--o{ Persona : "pertenece"
+    
+    %% Relaciones de herencia (1 a 1 opcional/obligatoria)
+    Persona ||--o| Directivo : "es"
+    Persona ||--o| Gestor : "es"
+    Persona ||--o| Profesor : "es"
+    Persona ||--o| Alumno : "es"
+
+    %% Relaciones académicas e históricas
+    Alumno ||--o{ Tiene_Inscrita : "registra"
+    Materia ||--o{ Tiene_Inscrita : "contiene"
+    
+    Profesor ||--o{ Profesor_Imparte_Materia : "dicta"
+    Materia ||--o{ Profesor_Imparte_Materia : "es_asignada"
+
+    %% Relación de auditoría
+    Gestor ||--o{ Gestor_Auditoria : "realiza"
+```
 
 ## Flujo de Operación (Automatización)
 
