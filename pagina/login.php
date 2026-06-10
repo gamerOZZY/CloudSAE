@@ -91,3 +91,87 @@ if($role === "profesor"){
     header("Location: index.html?error=wrong_password");
     exit();
 }
+
+/* ==========================
+   LOGIN GESTOR
+========================== */
+
+if($role === "gestor"){
+
+    $sql = "
+    SELECT
+        g.id_persona,
+        g.numero_empleado,
+        p.nombre_completo,
+        p.contrasena
+    FROM Gestor g
+    INNER JOIN Persona p
+        ON p.id_persona = g.id_persona
+    WHERE g.numero_empleado = ?
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$username]);
+
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if(!$usuario){
+        header("Location: index.html?error=user_not_found");
+        exit();
+    }
+
+    if($password === $usuario['contrasena']){
+
+        $_SESSION['rol'] = 'gestor';
+        $_SESSION['id_gestor'] = $usuario['id_persona'];
+        $_SESSION['nombre'] = $usuario['nombre_completo'];
+
+        header("Location: dashboard_gestor.php");
+        exit();
+    }
+
+    header("Location: index.html?error=wrong_password");
+    exit();
+}
+
+/* ==========================
+   LOGIN DIRECTIVO
+========================== */
+
+if($role === "directivo"){
+
+    $sql = "
+    SELECT
+        d.id_persona,
+        d.numero_empleado,
+        p.nombre_completo,
+        p.contrasena
+    FROM Directivo d
+    INNER JOIN Persona p
+        ON p.id_persona = d.id_persona
+    WHERE d.numero_empleado = ?
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$username]);
+
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if(!$usuario){
+        header("Location: index.html?error=user_not_found");
+        exit();
+    }
+
+    if($password === $usuario['contrasena']){
+
+        $_SESSION['rol'] = 'directivo';
+        $_SESSION['id_directivo'] = $usuario['id_persona'];
+        $_SESSION['nombre'] = $usuario['nombre_completo'];
+
+        header("Location: dashboard_directivo.php");
+        exit();
+    }
+
+    header("Location: index.html?error=wrong_password");
+    exit();
+}
