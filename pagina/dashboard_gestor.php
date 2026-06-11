@@ -15,9 +15,12 @@ $mensaje = "";
 // ==========================================
 function subirImagenAzure($archivoTmp, $nombreArchivo){
     // VARIABLES DE ENTORNO / CREDENCIALES
-    $storage_account = 'cuentalol'; 
-    $container = 'contenedorlol';    
-    $clave = 'clavelol';            
+    $storage_account = getenv('AZURE_STORAGE_ACCOUNT') ?: 'cloudsaeimages'; 
+    $container = getenv('AZURE_CONTAINER') ?: 'fotosalumnos';    
+    $clave = getenv('AZURE_STORAGE_KEY');
+    if (empty($clave)) {
+        die('Error: Variable de entorno AZURE_STORAGE_KEY no configurada');
+    }            
 
     $blob_url_base = "https://$storage_account.blob.core.windows.net/$container";
     $nombre = uniqid() . "_" . basename($nombreArchivo);
