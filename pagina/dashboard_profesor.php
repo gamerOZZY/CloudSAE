@@ -72,6 +72,19 @@ $stmt->execute([$idProfesor]);
 
 $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+/* --- Obtener foto de profesor (Asi es, hice otra consulta lol) --- */
+$sql_profesor = "
+SELECT p.foto_perfil 
+FROM Profesor pr
+INNER JOIN Persona p ON p.id_persona = pr.id_persona
+WHERE pr.id_persona = ?
+";
+$stmt = $pdo->prepare($sql_profesor);
+$stmt->execute([$idProfesor]);
+$infoProfesor = $stmt->fetch(PDO::FETCH_ASSOC);
+$fotoPerfil = $infoProfesor['foto_perfil'] ?? 'https://via.placeholder.com/150';
+
+
 /* ======================
    ALUMNOS
 ====================== */
@@ -571,6 +584,7 @@ foreach($alumnos as $i => $a) {
         type: 'table',
         columns: ['Propiedad', 'Valor'],
         data: [
+            ['Foto', '<img src="<?= $fotoPerfil ?>" width="80" style="border-radius:50%; border: 2px solid var(--wine-light);">'],
             ['Plataforma', 'Sistema de Administración Escolar (SAE)'],
             ['Rol de Usuario', 'Profesor'],
             ['Nombre', '<?= htmlspecialchars($_SESSION['nombre'] ?? 'Desconocido') ?>'],
