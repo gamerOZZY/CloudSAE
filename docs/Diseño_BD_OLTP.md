@@ -7,108 +7,7 @@ Para garantizar la integridad relacional, el control de acceso y la preparación
 El esquema sigue un modelo de normalización avanzado, utilizando herencia de tablas para separar la identidad general de los usuarios de sus roles específicos. Esta separación elimina la redundancia de datos, agiliza las consultas y permite un control de permisos granular directamente desde el motor de la base de datos.
 
 ---
-
-## Componentes Utilizados
-
-### 1. Tablas de Infraestructura Geográfica
-
-**Idea Central:** Segmentación física para habilitar la visualización en mapas de la República.
-
-- **Región Geográfica:** Almacena los identificadores espaciales (estados y municipios).
-- **Escuela:** Depende directamente de la región y actúa como el ancla para todos los usuarios del sistema.
-
-### 2. Superclase y Subclases de Identidad
-
-**Idea Central:** Centralización de credenciales y perfiles mediante herencia de datos (Estrategia *Tabla por Subclase*).
-
-#### Persona (Superclase)
-Almacena de forma centralizada:
-- Contraseñas.
-- Fotografías de perfil.
-- Adscripción a la escuela.
-
-Constituye el único punto de autenticación del sistema.
-
-#### Roles (Subclases)
-
-- **Alumno**
-- **Profesor**
-- **Gestor**
-- **Directivo**
-
-Cada una hereda el identificador de **Persona** mediante una relación 1:1 y almacena únicamente los atributos exclusivos de su cargo, tales como:
-
-- Boleta.
-- Tipo de contrato.
-- Cargo directivo.
-
-### 3. Catálogo y Relaciones Académicas (M:N)
-
-**Idea Central:** Resolución de relaciones muchos a muchos para el control transaccional del SAES.
-
-#### Materia
-Catálogo base de asignaturas.
-
-#### Tiene_Inscrita (Tabla Intermedia)
-
-Relaciona alumnos con materias y almacena:
-
-- Calificación parcial 1.
-- Calificación parcial 2.
-- Calificación parcial 3.
-- Grado.
-- Semestre.
-
-#### Profesor_Imparte_Materia (Tabla Intermedia)
-
-Relaciona profesores con materias para determinar qué docentes tienen autorización para registrar calificaciones.
-
-### 4. Módulo de Auditoría
-
-**Idea Central:** Trazabilidad estricta de los movimientos administrativos.
-
-#### Gestor_Auditoria
-
-Bitácora inmutable que registra:
-
-- Qué gestor ejecutó la operación.
-- Altas realizadas.
-- Bajas realizadas.
-- Modificaciones efectuadas.
-
-Esto permite prevenir alteraciones no autorizadas y mantener evidencia histórica de los cambios.
-
----
-
-## Seguridad y Control de Acceso (RBAC)
-
-Se implementó el principio de mínimo privilegio utilizando el sistema nativo de **GRANT** y **REVOKE** de MySQL, complementado con restricciones en el backend.
-
-### Directivo
-- Acceso total a la gestión de usuarios administrativos.
-- CRUD completo sobre gestores.
-
-### Gestor
-- Inserción y modificación de alumnos.
-- Inserción y modificación de profesores.
-- Gestión de inscripciones.
-- Sin permisos para modificar calificaciones.
-
-### Profesor
-- Único rol con capacidad de realizar `UPDATE` sobre:
-  - `parcial_1`
-  - `parcial_2`
-  - `parcial_3`
-
-de la tabla **Tiene_Inscrita**.
-
-El backend restringe además que únicamente pueda modificar alumnos asociados a sus materias.
-
-### Alumno
-- Permisos de solo lectura (`SELECT`) sobre su historial académico.
-- Permiso de escritura limitado a la actualización de su fotografía de perfil.
-
----
+## Diagrama de la base de datos
 ```mermaid
 erDiagram
     %% ==========================================
@@ -225,6 +124,109 @@ erDiagram
     %% Relación de auditoría
     Gestor ||--o{ Gestor_Auditoria : "realiza"
 ```
+---
+
+## Componentes Utilizados
+
+### 1. Tablas de Infraestructura Geográfica
+
+**Idea Central:** Segmentación física para habilitar la visualización en mapas de la República.
+
+- **Región Geográfica:** Almacena los identificadores espaciales (estados y municipios).
+- **Escuela:** Depende directamente de la región y actúa como el ancla para todos los usuarios del sistema.
+
+### 2. Superclase y Subclases de Identidad
+
+**Idea Central:** Centralización de credenciales y perfiles mediante herencia de datos (Estrategia *Tabla por Subclase*).
+
+#### Persona (Superclase)
+Almacena de forma centralizada:
+- Contraseñas.
+- Fotografías de perfil.
+- Adscripción a la escuela.
+
+Constituye el único punto de autenticación del sistema.
+
+#### Roles (Subclases)
+
+- **Alumno**
+- **Profesor**
+- **Gestor**
+- **Directivo**
+
+Cada una hereda el identificador de **Persona** mediante una relación 1:1 y almacena únicamente los atributos exclusivos de su cargo, tales como:
+
+- Boleta.
+- Tipo de contrato.
+- Cargo directivo.
+
+### 3. Catálogo y Relaciones Académicas (M:N)
+
+**Idea Central:** Resolución de relaciones muchos a muchos para el control transaccional del SAES.
+
+#### Materia
+Catálogo base de asignaturas.
+
+#### Tiene_Inscrita (Tabla Intermedia)
+
+Relaciona alumnos con materias y almacena:
+
+- Calificación parcial 1.
+- Calificación parcial 2.
+- Calificación parcial 3.
+- Grado.
+- Semestre.
+
+#### Profesor_Imparte_Materia (Tabla Intermedia)
+
+Relaciona profesores con materias para determinar qué docentes tienen autorización para registrar calificaciones.
+
+### 4. Módulo de Auditoría
+
+**Idea Central:** Trazabilidad estricta de los movimientos administrativos.
+
+#### Gestor_Auditoria
+
+Bitácora inmutable que registra:
+
+- Qué gestor ejecutó la operación.
+- Altas realizadas.
+- Bajas realizadas.
+- Modificaciones efectuadas.
+
+Esto permite prevenir alteraciones no autorizadas y mantener evidencia histórica de los cambios.
+
+---
+
+## Seguridad y Control de Acceso (RBAC)
+
+Se implementó el principio de mínimo privilegio utilizando el sistema nativo de **GRANT** y **REVOKE** de MySQL, complementado con restricciones en el backend.
+
+### Directivo
+- Acceso total a la gestión de usuarios administrativos.
+- CRUD completo sobre gestores.
+
+### Gestor
+- Inserción y modificación de alumnos.
+- Inserción y modificación de profesores.
+- Gestión de inscripciones.
+- Sin permisos para modificar calificaciones.
+
+### Profesor
+- Único rol con capacidad de realizar `UPDATE` sobre:
+  - `parcial_1`
+  - `parcial_2`
+  - `parcial_3`
+
+de la tabla **Tiene_Inscrita**.
+
+El backend restringe además que únicamente pueda modificar alumnos asociados a sus materias.
+
+### Alumno
+- Permisos de solo lectura (`SELECT`) sobre su historial académico.
+- Permiso de escritura limitado a la actualización de su fotografía de perfil.
+
+---
 
 ## Flujo de Operación (Automatización)
 
