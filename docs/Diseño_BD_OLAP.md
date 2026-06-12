@@ -9,7 +9,93 @@ A diferencia del modelo OLTP, cuya finalidad principal es garantizar la integrid
 El diseño utiliza dimensiones descriptivas y una tabla de hechos central, permitiendo analizar el desempeño académico desde múltiples perspectivas, incluyendo ubicación geográfica, materia, características del alumno y temporalidad de los eventos académicos.
 
 ---
+## Diagrama conceptual OLAP
+```mermaid
+flowchart LR
 
+    A[Dim_Alumno]
+    U[Dim_Ubicacion]
+    M[Dim_Materia]
+    T1[Dim_Tiempo<br>Inscripción]
+    T2[Dim_Tiempo<br>Finalización]
+
+    F[Fact_Rendimiento]
+
+    A --> F
+    U --> F
+    M --> F
+    T1 --> F
+    T2 --> F
+```
+
+## Esquema estrella
+
+```mermaid
+erDiagram
+
+    Dim_Alumno {
+        INT sk_alumno PK
+        INT id_persona_oltp UK
+        VARCHAR boleta
+        INT edad
+        VARCHAR rango_edad
+    }
+
+    Dim_Ubicacion {
+        INT sk_ubicacion PK
+        INT id_escuela_oltp UK
+        VARCHAR nombre_escuela
+        VARCHAR nombre_region
+    }
+
+    Dim_Materia {
+        INT sk_materia PK
+        INT id_materia_oltp UK
+        VARCHAR nombre_materia
+    }
+
+    Dim_Tiempo {
+        INT sk_tiempo PK
+        DATE fecha UK
+        INT dia
+        INT mes
+        VARCHAR nombre_mes
+        INT trimestre
+        INT semestre_academico
+        INT anio
+    }
+
+    Fact_Rendimiento {
+        BIGINT id_fact PK
+
+        INT sk_alumno FK
+        INT sk_ubicacion FK
+        INT sk_materia FK
+
+        INT sk_tiempo_inscripcion FK
+        INT sk_tiempo_finalizacion FK
+
+        DECIMAL parcial_1
+        DECIMAL parcial_2
+        DECIMAL parcial_3
+
+        DECIMAL calificacion_final
+        BOOLEAN aprobado
+    }
+
+    etl_control {
+        VARCHAR process_name PK
+        DATETIME last_processed
+    }
+
+    Dim_Alumno ||--o{ Fact_Rendimiento : alumno
+    Dim_Ubicacion ||--o{ Fact_Rendimiento : ubicacion
+    Dim_Materia ||--o{ Fact_Rendimiento : materia
+
+    Dim_Tiempo ||--o{ Fact_Rendimiento : fecha_inscripcion
+    Dim_Tiempo ||--o{ Fact_Rendimiento : fecha_finalizacion
+```
+---
 ## Componentes Utilizados
 
 ### 1. Dimensiones Analíticas
