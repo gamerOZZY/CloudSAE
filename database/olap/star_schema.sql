@@ -75,3 +75,34 @@ CREATE TABLE Fact_Rendimiento (
     FOREIGN KEY (sk_tiempo_finalizacion)
         REFERENCES Dim_Tiempo(sk_tiempo)
 );
+
+-- ==========================================
+-- Registro para el ETL
+-- ==========================================
+
+CREATE TABLE etl_control (
+    process_name VARCHAR(100) PRIMARY KEY,
+    last_processed DATETIME NOT NULL
+);
+
+INSERT INTO etl_control
+VALUES (
+    'mysql_etl',
+    '2000-01-01 00:00:00'
+);
+
+ALTER TABLE Dim_Alumno
+ADD UNIQUE(id_persona_oltp);
+
+ALTER TABLE Dim_Ubicacion
+ADD UNIQUE(id_escuela_oltp);
+
+ALTER TABLE Dim_Materia
+ADD UNIQUE(id_materia_oltp);
+
+ALTER TABLE Fact_Rendimiento
+ADD UNIQUE (
+    sk_alumno,
+    sk_materia,
+    sk_tiempo_inscripcion
+);
