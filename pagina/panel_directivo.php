@@ -1,266 +1,460 @@
 <?php
 session_start();
 
-// 1. Mostrar errores temporalmente (útil para depurar la pantalla blanca)
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// 2. Validación de seguridad estricta
+// Validación de seguridad
 if(!isset($_SESSION['id_directivo']) || $_SESSION['rol'] !== 'directivo'){
     header("Location: index.html");
     exit();
 }
 
-// 3. CONEXIÓN EXCLUSIVA AL OLAP (AZURE)
+// 1. CONEXIÓN AL OLAP
 $host = "baseanalitica.mysql.database.azure.com";
 $user = "gamerOZZY";
-$pass = "Password123";
+$pass = "Password123#";
 $dbname = "olapsae";
 
 try {
-    // Instanciamos un nuevo PDO solo para el dashboard
     $pdoOlap = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
     $pdoOlap->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // 4. CONSULTA DE KPIs GLOBALES
-    $sqlKPI = "
-        SELECT 
-            COUNT(DISTINCT sk_alumno) AS total_alumnos,
-            ROUND(AVG(calificacion_final), 2) AS promedio_global,
-            ROUND((SUM(aprobado) / COUNT(*)) * 100, 2) AS pct_aprobacion
-        FROM Fact_Rendimiento
-    ";
-    $stmt = $pdoOlap->query($sqlKPI);
-    $kpis = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    // 5. CONSULTA DE EVOLUCIÓN TEMPORAL
-    $sqlTemporal = "
-        SELECT 
-            CONCAT(t.anio, ' - T', t.trimestre) AS periodo,
-            ROUND(AVG(f.calificacion_final), 2) AS promedio
-        FROM Fact_Rendimiento f
-        INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
-        GROUP BY t.anio, t.trimestre
-        ORDER BY t.anio ASC, t.trimestre ASC
-    ";
-    $stmt = $pdoOlap->query($sqlTemporal);
-    $evolucion = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // 6. CONSULTA DE MATERIAS CON MAYOR REPROBACIÓN
-    $sqlMaterias = "
-        SELECT 
-            m.nombre_materia,
-            ROUND((SUM(CASE WHEN f.aprobado = 0 THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) AS pct_reprobacion
-        FROM Fact_Rendimiento f
-        INNER JOIN Dim_Materia m ON f.sk_materia = m.sk_materia
-        GROUP BY m.nombre_materia
-        ORDER BY pct_reprobacion DESC
-        LIMIT 5
-    ";
-    $stmt = $pdoOlap->query($sqlMaterias);
-    $materias_criticas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 } catch (PDOException $e) {
-    // Si falla la conexión a Azure, detiene todo y te muestra el error exacto
-    die("Error al conectar con el Data Warehouse OLAP en Azure: " . $e->getMessage());
+    die("Error crítico al conectar al OLAP en Azure: " . $e->getMessage());
 }
+
+// ======================================================================
+// 2. MODO API: PROCESAMIENTO ANALÍTICO (OLAP)
+// ======================================================================
+if (isset($_GET['api']) && $_GET['api'] == '1') {
+    header('Content-Type: application/json');
+
+    $where = "WHERE 1=1";
+    $params = [];
+
+    // CAMBIO: Si viene vacío, es "Histórico Total"
+    $anio_actual = $_GET['anio'] ?? ''; 
+    $region = $_GET['region'] ?? '';
+    $escuela = $_GET['escuela'] ?? '';
+
+    // Si seleccionó un año específico, aplicamos el filtro
+    if ($anio_actual !== '') {
+        $where .= " AND t.anio = ?";
+        $params[] = (int)$anio_actual;
+    }
+
+    if (!empty($escuela)) {
+        $where .= " AND u.nombre_escuela = ?";
+        $params[] = $escuela;
+    } else if (!empty($region)) {
+        $where .= " AND u.nombre_region = ?";
+        $params[] = $region;
+    }
+
+    try {
+        $data = [];
+
+        // A. KPIs GLOBALES
+        $stmt = $pdoOlap->prepare("
+            SELECT 
+                COUNT(DISTINCT f.sk_alumno) AS total_alumnos,
+                ROUND(AVG(f.calificacion_final), 2) AS promedio_global,
+                ROUND((SUM(f.aprobado) / COUNT(*)) * 100, 1) AS pct_aprobacion
+            FROM Fact_Rendimiento f
+            INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+            INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+            $where
+        ");
+        $stmt->execute($params);
+        $kpi_actual = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // B. CÁLCULO DE SEMÁFOROS (Deltas) - Solo si NO es Histórico Total
+        if ($anio_actual !== '') {
+            $where_prev = str_replace("t.anio = ?", "t.anio = ?", $where);
+            $params_prev = $params;
+            $params_prev[0] = (int)$anio_actual - 1;
+
+            $stmt_prev = $pdoOlap->prepare("
+                SELECT 
+                    COUNT(DISTINCT f.sk_alumno) AS total_alumnos,
+                    ROUND(AVG(f.calificacion_final), 2) AS promedio_global,
+                    ROUND((SUM(f.aprobado) / COUNT(*)) * 100, 1) AS pct_aprobacion
+                FROM Fact_Rendimiento f
+                INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+                INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+                $where_prev
+            ");
+            $stmt_prev->execute($params_prev);
+            $kpi_prev = $stmt_prev->fetch(PDO::FETCH_ASSOC);
+
+            $data['kpi'] = [
+                'alumnos' => number_format($kpi_actual['total_alumnos']),
+                'alumnos_dif' => $kpi_actual['total_alumnos'] - ($kpi_prev['total_alumnos'] ?? 0),
+                'promedio' => $kpi_actual['promedio_global'] ?? '0.00',
+                'promedio_dif' => round(($kpi_actual['promedio_global'] ?? 0) - ($kpi_prev['promedio_global'] ?? 0), 2),
+                'aprobacion' => ($kpi_actual['pct_aprobacion'] ?? '0.0') . '%',
+                'aprobacion_dif' => round(($kpi_actual['pct_aprobacion'] ?? 0) - ($kpi_prev['pct_aprobacion'] ?? 0), 1)
+            ];
+        } else {
+            // Histórico Total: Apagamos los semáforos
+            $data['kpi'] = [
+                'alumnos' => number_format($kpi_actual['total_alumnos']),
+                'alumnos_dif' => 0,
+                'promedio' => $kpi_actual['promedio_global'] ?? '0.00',
+                'promedio_dif' => 0,
+                'aprobacion' => ($kpi_actual['pct_aprobacion'] ?? '0.0') . '%',
+                'aprobacion_dif' => 0
+            ];
+        }
+
+        // C. SISTEMA DE DETECCIÓN TEMPRANA (Predictivo)
+        $stmt = $pdoOlap->prepare("
+            SELECT COUNT(DISTINCT f.sk_alumno) AS alumnos_en_riesgo
+            FROM Fact_Rendimiento f
+            INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+            INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+            $where AND f.parcial_1 < 6 AND f.parcial_2 < 6
+        ");
+        $stmt->execute($params);
+        $riesgo = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if($riesgo['alumnos_en_riesgo'] > 0) {
+            $data['insight'] = "🔴 <b>Detección Temprana:</b> <b>{$riesgo['alumnos_en_riesgo']} alumnos</b> están en riesgo inminente de deserción por haber reprobado los parciales 1 y 2.";
+        } else {
+            $data['insight'] = "✅ <b>Estabilidad:</b> No se detectan anomalías masivas en la cohorte actual de estudiantes.";
+        }
+
+        // D. EMBUDO DE DESEMPEÑO (Evolución de Parciales)
+        $stmt = $pdoOlap->prepare("
+            SELECT 
+                ROUND(AVG(f.parcial_1), 2) AS p1,
+                ROUND(AVG(f.parcial_2), 2) AS p2,
+                ROUND(AVG(f.parcial_3), 2) AS p3,
+                ROUND(AVG(f.calificacion_final), 2) AS final
+            FROM Fact_Rendimiento f
+            INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+            INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+            $where
+        ");
+        $stmt->execute($params);
+        $data['embudo'] = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // E. DRILL-DOWN GEOGRÁFICO
+        if(empty($region) && empty($escuela)){
+            $stmt = $pdoOlap->prepare("
+                SELECT u.nombre_region AS nombre, ROUND((SUM(f.aprobado) / COUNT(*)) * 100, 1) AS valor
+                FROM Fact_Rendimiento f
+                INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+                INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+                $where GROUP BY u.nombre_region ORDER BY valor DESC
+            ");
+            $data['geo_nivel'] = 'region';
+        } else {
+            $stmt = $pdoOlap->prepare("
+                SELECT u.nombre_escuela AS nombre, ROUND((SUM(f.aprobado) / COUNT(*)) * 100, 1) AS valor
+                FROM Fact_Rendimiento f
+                INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+                INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+                $where GROUP BY u.nombre_escuela ORDER BY valor DESC LIMIT 7
+            ");
+            $data['geo_nivel'] = 'escuela';
+        }
+        $stmt->execute($params);
+        $data['geografia'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // F. MATERIAS CRÍTICAS
+        $stmt = $pdoOlap->prepare("
+            SELECT m.nombre_materia, ROUND((SUM(CASE WHEN f.aprobado = 0 THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) AS reprobacion
+            FROM Fact_Rendimiento f
+            INNER JOIN Dim_Materia m ON f.sk_materia = m.sk_materia
+            INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+            INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+            $where GROUP BY m.nombre_materia ORDER BY reprobacion DESC LIMIT 5
+        ");
+        $stmt->execute($params);
+        $data['materias'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // G. MATRIZ DEMOGRÁFICA
+        $stmt = $pdoOlap->prepare("
+            SELECT a.rango_edad, ROUND((SUM(f.aprobado) / COUNT(*)) * 100, 1) AS aprobacion
+            FROM Fact_Rendimiento f
+            INNER JOIN Dim_Alumno a ON f.sk_alumno = a.sk_alumno
+            INNER JOIN Dim_Tiempo t ON f.sk_tiempo_inscripcion = t.sk_tiempo
+            INNER JOIN Dim_Ubicacion u ON f.sk_ubicacion = u.sk_ubicacion
+            $where GROUP BY a.rango_edad ORDER BY aprobacion DESC
+        ");
+        $stmt->execute($params);
+        $data['edades'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode($data);
+        exit();
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(["error" => "Error OLAP: " . $e->getMessage()]);
+        exit();
+    }
+}
+
+// ======================================================================
+// 3. MODO VISTA: CARGAMOS CATÁLOGOS HTML
+// ======================================================================
+$anios = $pdoOlap->query("SELECT DISTINCT anio FROM Dim_Tiempo ORDER BY anio DESC")->fetchAll(PDO::FETCH_COLUMN);
+$regiones = $pdoOlap->query("SELECT DISTINCT nombre_region FROM Dim_Ubicacion ORDER BY nombre_region")->fetchAll(PDO::FETCH_COLUMN);
+$escuelas = $pdoOlap->query("SELECT DISTINCT nombre_escuela FROM Dim_Ubicacion ORDER BY nombre_escuela")->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel Directivo — SAES</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <title>BI Directivo — SAES</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* =============================================
-       VARIABLES Y RESET (TU DISEÑO ORIGINAL)
-       ============================================= */
     :root {
       --wine-dark:   #62152d;   
       --wine-mid:    #952f57;   
       --wine-light:  #ca668b;   
       --black-deep:  #040404;   
-      --black-soft:  #0f0f0f;   
       --surface-0:   #080306;
       --surface-1:   #120710;
       --surface-2:   #1c0d18;
-      --surface-3:   #2a1422;
       --text-primary:   #f2e8ec;
       --text-secondary: #c9a0b2;
       --text-muted:     #7a5060;
-      --wine-pale:  #e8c0cf;
-      --border-faint:  rgba(202, 102, 139, 0.12);
-      --border-soft:   rgba(202, 102, 139, 0.25);
+      --border-faint:  rgba(202, 102, 139, 0.2);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--black-deep);
-      color: var(--text-primary);
-      height: 100vh;
-      overflow: hidden;
+    body { font-family: 'DM Sans', sans-serif; background: var(--black-deep); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    
+    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--surface-1); padding: 15px 30px; border-bottom: 1px solid var(--border-faint); z-index: 10; }
+    .nav-brand { display: flex; align-items: center; gap: 15px; }
+    .logo-mark { width: 40px; height: 40px; background: linear-gradient(135deg, var(--wine-dark), var(--wine-mid)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-weight: 700; color: #fff; }
+    .nav-filters { display: flex; gap: 10px; flex-wrap: wrap; }
+    .filter-select { background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--wine-dark); padding: 8px 16px; border-radius: 6px; outline: none; font-size: 13px; font-family: inherit; }
+    .logout-btn { color: var(--wine-light); text-decoration: none; font-size: 14px; padding: 8px 16px; border: 1px solid var(--wine-dark); border-radius: 6px; transition: 0.3s; }
+    .logout-btn:hover { background: var(--wine-dark); color: #fff; }
+
+    .content-area { flex: 1; overflow-y: auto; padding: 30px; }
+    
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .kpi-card { background: var(--surface-1); padding: 20px; border-radius: 12px; border: 1px solid var(--border-faint); border-left: 4px solid var(--wine-light); }
+    .kpi-title { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 5px; }
+    .kpi-val { font-family: 'Cormorant Garamond', serif; font-size: 38px; font-weight: 600; line-height: 1; margin-bottom: 8px; }
+    
+    /* Variables y clases dinámicas para el JS */
+    .kpi-trend { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+    .kpi-trend.positive { color: #34d399; }
+    .kpi-trend.negative { color: #f87171; }
+    .kpi-trend.neutral { color: var(--text-muted); }
+    
+    .insight-panel { background: rgba(202, 102, 139, 0.1); border: 1px solid var(--wine-mid); padding: 16px 24px; border-radius: 8px; margin-bottom: 25px; font-size: 15px; color: var(--text-primary); display: flex; align-items: center; gap: 15px; }
+    
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-bottom: 40px; }
+    .chart-box { background: var(--surface-1); padding: 20px; border-radius: 12px; border: 1px solid var(--border-faint); height: 320px; display: flex; flex-direction: column; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .chart-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+    .chart-canvas-container { flex: 1; position: relative; min-height: 0; }
+    
+    .btn-back { background: var(--surface-2); border: 1px solid var(--wine-dark); color: var(--text-primary); padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; display: none; }
+
+    @media (max-width: 768px) {
+      .navbar { flex-direction: column; align-items: stretch; gap: 15px; padding: 20px; }
+      .nav-brand { justify-content: space-between; }
+      .nav-filters { flex-direction: column; }
+      .content-area { padding: 15px; }
+      .charts-grid { grid-template-columns: 1fr; }
     }
-    
-    /* SHELL Y SIDEBAR */
-    .app { display: flex; height: 100vh; padding-top: 36px; }
-    .sidebar { width: 268px; background: var(--surface-1); border-right: 1px solid var(--border-faint); display: flex; flex-direction: column; }
-    .sidebar-logo { padding: 22px; border-bottom: 1px solid var(--border-faint); }
-    .logo-row { display: flex; align-items: center; gap: 11px; }
-    .logo-mark { width: 38px; height: 38px; background: linear-gradient(135deg, var(--wine-dark), var(--wine-mid)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 700; color: var(--wine-pale); }
-    .logo-name { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; }
-    .logo-tagline { font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); }
-    
-    /* BOTÓN DE CERRAR SESIÓN */
-    .sidebar-cta { padding: 10px 12px; margin-top: auto; border-top: 1px solid var(--border-faint); }
-    .btn-cta { display: block; width: 100%; padding: 13px; background: linear-gradient(135deg, var(--wine-mid), var(--wine-dark)); border-radius: 12px; color: var(--wine-pale); font-size: 12px; font-weight: 500; text-align: center; text-decoration: none; }
-    
-    /* CONTENT AREA */
-    .content-area { flex: 1; padding: 18px 18px 18px 0; overflow: hidden; display: flex; }
-    .content-panel { flex: 1; background: var(--surface-1); border-radius: 20px; border: 1px solid var(--border-faint); padding: 44px; overflow-y: auto; }
-    .panel-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 100px; padding: 5px 14px; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wine-light); margin-bottom: 22px; }
-    .tag-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--wine-light); }
-    .panel-title { font-family: 'Cormorant Garamond', serif; font-size: 48px; font-weight: 600; color: var(--text-primary); margin-bottom: 24px; }
-    .panel-title em { font-style: italic; color: var(--wine-light); }
-
-    /* DASHBOARD UI COMPONENTES */
-    .dashboard-grid { display: grid; gap: 24px; margin-top: 20px; }
-    
-    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
-    .kpi-card { background: linear-gradient(145deg, var(--surface-2), var(--surface-1)); border: 1px solid var(--border-faint); border-radius: 16px; padding: 24px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--wine-light); }
-    .kpi-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
-    .kpi-value { font-family: 'Cormorant Garamond', serif; font-size: 42px; font-weight: 700; color: var(--text-primary); }
-
-    .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
-    .chart-card { background: var(--surface-0); border: 1px solid var(--border-faint); border-radius: 16px; padding: 24px; height: 360px; }
-    .chart-header { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 16px; border-bottom: 1px solid var(--border-faint); padding-bottom: 10px; }
   </style>
 </head>
 <body>
 
-  <div class="app">
-    <aside class="sidebar">
-      <div class="sidebar-logo">
-        <div class="logo-row">
-          <div class="logo-mark">IPN</div>
-          <div>
-            <div class="logo-name">ESCOM</div>
-            <div class="logo-tagline">Data Warehouse</div>
-          </div>
-        </div>
-      </div>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-mark">BI</div>
+      <div style="font-family: 'Cormorant Garamond', serif; font-size: 24px;">Data Warehouse</div>
+      <a href="logout.php" class="logout-btn" style="margin-left: auto;">Salir</a>
+    </div>
+    <div class="nav-filters">
+      <!-- Filtro Modificado para incluir Histórico Total -->
+      <select id="filtroAnio" class="filter-select" onchange="triggerFilter('anio')">
+        <option value="">Histórico Total (Todos los años)</option>
+        <?php foreach($anios as $a): ?><option value="<?= $a ?>"><?= $a ?></option><?php endforeach; ?>
+      </select>
       
-      <div style="padding: 22px; color: var(--text-secondary); font-size: 13px;">
-          Bienvenido, <br>
-          <strong style="color: var(--text-primary);"><?= htmlspecialchars($_SESSION['nombre'] ?? 'Directivo') ?></strong>
+      <select id="filtroRegion" class="filter-select" onchange="triggerFilter('region')">
+        <option value="">Nacional (Todas las Regiones)</option>
+        <?php foreach($regiones as $r): ?><option value="<?= $r ?>"><?= $r ?></option><?php endforeach; ?>
+      </select>
+      
+      <select id="filtroEscuela" class="filter-select" onchange="triggerFilter('escuela')">
+        <option value="">Todas las Escuelas</option>
+        <?php foreach($escuelas as $e): ?><option value="<?= $e ?>"><?= $e ?></option><?php endforeach; ?>
+      </select>
+    </div>
+  </nav>
+
+  <main class="content-area">
+    <div class="insight-panel" id="insightBox">Analizando cubo OLAP...</div>
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-title">Población Analizada</div>
+        <div class="kpi-val" id="kTotal">0</div>
+        <div class="kpi-trend" id="kTotalTrend">--</div>
       </div>
-
-      <div class="sidebar-cta">
-        <a href="logout.php" class="btn-cta">Cerrar sesión</a>
+      <div class="kpi-card">
+        <div class="kpi-title">Promedio Institucional</div>
+        <div class="kpi-val" id="kPromedio">0.00</div>
+        <div class="kpi-trend" id="kPromedioTrend">--</div>
       </div>
-    </aside>
+      <div class="kpi-card">
+        <div class="kpi-title">Tasa de Aprobación</div>
+        <div class="kpi-val" id="kAprobacion">0%</div>
+        <div class="kpi-trend" id="kAprobacionTrend">--</div>
+      </div>
+    </div>
 
-    <main class="content-area">
-      <div class="content-panel">
-        <div class="panel-tag"><span class="tag-dot"></span>Inteligencia</div>
-        <h1 class="panel-title">Panel <em>Ejecutivo.</em></h1>
-
-        <div class="dashboard-grid">
-          
-          <div class="kpi-row">
-            <div class="kpi-card">
-              <div class="kpi-title">Población Analizada</div>
-              <div class="kpi-value"><?= number_format($kpis['total_alumnos'] ?? 0) ?></div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-title">Punto de Equilibrio (Promedio)</div>
-              <div class="kpi-value"><?= number_format($kpis['promedio_global'] ?? 0, 2) ?></div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-title">Tasa de Aprobación</div>
-              <div class="kpi-value"><?= number_format($kpis['pct_aprobacion'] ?? 0, 1) ?>%</div>
-            </div>
-          </div>
-
-          <div class="charts-row">
-            <div class="chart-card">
-              <div class="chart-header">Evolución del Promedio Institucional</div>
-              <canvas id="chartEvolucion"></canvas>
-            </div>
-            <div class="chart-card">
-              <div class="chart-header">Alerta: Materias con Mayor Reprobación</div>
-              <canvas id="chartMaterias"></canvas>
-            </div>
-          </div>
-
+    <!-- GRÁFICAS -->
+    <div class="charts-grid">
+      <div class="chart-box">
+        <div class="chart-header">
+          <span class="chart-title">Desempeño Geográfico</span>
+          <button id="btnBackGeo" class="btn-back" onclick="clearGeoDrill()">← Subir Nivel</button>
         </div>
+        <div class="chart-canvas-container"><canvas id="cGeografia"></canvas></div>
       </div>
-    </main>
-  </div>
+
+      <div class="chart-box">
+        <div class="chart-header"><span class="chart-title">Embudo de Desempeño (Parciales)</span></div>
+        <div class="chart-canvas-container"><canvas id="cEmbudo"></canvas></div>
+      </div>
+
+      <div class="chart-box">
+        <div class="chart-header"><span class="chart-title">Top 5 Materias Críticas (% Reprobación)</span></div>
+        <div class="chart-canvas-container"><canvas id="cMaterias"></canvas></div>
+      </div>
+
+      <div class="chart-box">
+        <div class="chart-header"><span class="chart-title">Madurez vs Rendimiento (Tasa Aprobación)</span></div>
+        <div class="chart-canvas-container"><canvas id="cEdad"></canvas></div>
+      </div>
+    </div>
+  </main>
 
   <script>
-    // Inyectamos los datos procesados en PHP directamente a JavaScript
-    const dataEvolucion = <?= json_encode($evolucion) ?>;
-    const dataMaterias = <?= json_encode($materias_criticas) ?>;
-
-    // Configuración global de estilos para Chart.js
     Chart.defaults.color = '#c9a0b2';
     Chart.defaults.font.family = "'DM Sans', sans-serif";
     Chart.defaults.scale.grid.color = 'rgba(202, 102, 139, 0.1)';
+    let charts = {};
+    let currentGeoNivel = 'region';
 
-    // 1. Gráfica de Líneas (Evolución)
-    if(dataEvolucion && dataEvolucion.length > 0) {
-        const ctxEvolucion = document.getElementById('chartEvolucion').getContext('2d');
-        new Chart(ctxEvolucion, {
-          type: 'line',
-          data: {
-            labels: dataEvolucion.map(d => d.periodo),
-            datasets: [{
-              label: 'Promedio de Calificaciones',
-              data: dataEvolucion.map(d => d.promedio),
-              borderColor: '#ca668b',
-              backgroundColor: 'rgba(202, 102, 139, 0.15)',
-              borderWidth: 2,
-              fill: true,
-              tension: 0.4,
-              pointBackgroundColor: '#952f57'
-            }]
-          },
-          options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } }
-          }
-        });
+    function triggerFilter(source) {
+        if(source === 'escuela' && document.getElementById('filtroEscuela').value !== "") {
+            document.getElementById('filtroRegion').value = ""; 
+        } else if (source === 'region' && document.getElementById('filtroRegion').value !== "") {
+            document.getElementById('filtroEscuela').value = ""; 
+        }
+        fetchOLAP();
     }
 
-    // 2. Gráfica de Barras (Materias Críticas)
-    if(dataMaterias && dataMaterias.length > 0) {
-        const ctxMaterias = document.getElementById('chartMaterias').getContext('2d');
-        new Chart(ctxMaterias, {
+    function updateTrend(elId, diff, isHigherBetter = true) {
+      const el = document.getElementById(elId);
+      el.className = 'kpi-trend';
+      
+      // Si el filtro de año está vacío (Histórico Total), ocultamos el texto de comparación
+      if(document.getElementById('filtroAnio').value === "") {
+          el.innerHTML = `<span class="neutral">▬ Acumulado total</span>`;
+          return;
+      }
+
+      if(diff === 0) { el.innerHTML = `<span class="neutral">▬ 0</span> vs año ant.`; return; }
+      
+      const isPositive = diff > 0;
+      const isGood = isHigherBetter ? isPositive : !isPositive;
+      
+      el.classList.add(isGood ? 'positive' : 'negative');
+      const arrow = isPositive ? '▲ +' : '▼ ';
+      el.innerHTML = `<span>${arrow}${diff}</span> vs año ant.`;
+    }
+
+    async function fetchOLAP() {
+      const anio = document.getElementById('filtroAnio').value;
+      const region = document.getElementById('filtroRegion').value;
+      const escuela = document.getElementById('filtroEscuela').value;
+
+      try {
+        const res = await fetch(`panel_directivo.php?api=1&anio=${anio}&region=${region}&escuela=${escuela}`);
+        const data = await res.json();
+        if(data.error) { console.error("Error SQL:", data.error); return; }
+
+        document.getElementById('kTotal').innerText = data.kpi.alumnos || 0;
+        updateTrend('kTotalTrend', data.kpi.alumnos_dif);
+        
+        document.getElementById('kPromedio').innerText = data.kpi.promedio || '0.00';
+        updateTrend('kPromedioTrend', data.kpi.promedio_dif);
+        
+        document.getElementById('kAprobacion').innerText = (data.kpi.aprobacion || 0);
+        updateTrend('kAprobacionTrend', data.kpi.aprobacion_dif);
+
+        document.getElementById('insightBox').innerHTML = data.insight;
+
+        Object.values(charts).forEach(c => c.destroy());
+
+        currentGeoNivel = data.geo_nivel;
+        document.getElementById('btnBackGeo').style.display = (currentGeoNivel === 'escuela' && region === '') ? 'inline-block' : 'none';
+        
+        const geoLabels = data.geografia.map(d=>d.nombre);
+        charts['cGeografia'] = new Chart(document.getElementById('cGeografia').getContext('2d'), {
           type: 'bar',
-          data: {
-            labels: dataMaterias.map(d => d.nombre_materia),
-            datasets: [{
-              label: '% de Reprobación',
-              data: dataMaterias.map(d => d.pct_reprobacion),
-              backgroundColor: '#952f57',
-              borderRadius: 6
-            }]
-          },
+          data: { labels: geoLabels, datasets: [{ label: '% Aprobación', data: data.geografia.map(d=>d.valor), backgroundColor: '#ca668b', borderRadius: 4 }] },
           options: { 
-            indexAxis: 'y', 
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } }
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            onClick: (e, elements) => {
+              if (elements.length > 0 && currentGeoNivel === 'region') {
+                document.getElementById('filtroRegion').value = geoLabels[elements[0].index];
+                document.getElementById('filtroEscuela').value = "";
+                fetchOLAP();
+              }
+            }
           }
         });
+
+        if(data.embudo) {
+            charts['cEmbudo'] = new Chart(document.getElementById('cEmbudo').getContext('2d'), {
+              type: 'line',
+              data: { 
+                  labels: ['Parcial 1', 'Parcial 2', 'Parcial 3', 'Calif. Final'], 
+                  datasets: [{ label: 'Promedio Institucional', data: [data.embudo.p1, data.embudo.p2, data.embudo.p3, data.embudo.final], borderColor: '#ca668b', backgroundColor: 'rgba(202, 102, 139, 0.15)', borderWidth: 3, fill: true, tension: 0.4 }] 
+              },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 10 } } }
+            });
+        }
+
+        charts['cMaterias'] = new Chart(document.getElementById('cMaterias').getContext('2d'), {
+          type: 'bar',
+          data: { labels: data.materias.map(d=>d.nombre_materia), datasets: [{ label: '% Reprobación', data: data.materias.map(d=>d.reprobacion), backgroundColor: '#952f57', borderRadius: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+
+        charts['cEdad'] = new Chart(document.getElementById('cEdad').getContext('2d'), {
+          type: 'bar',
+          data: { labels: data.edades.map(d=>d.rango_edad), datasets: [{ label: '% Aprobación', data: data.edades.map(d=>d.aprobacion), backgroundColor: '#62152d', borderRadius: 4 }] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+
+      } catch(err) { console.error("Error OLAP: ", err); }
     }
+
+    function clearGeoDrill() {
+      document.getElementById('filtroRegion').value = "";
+      document.getElementById('filtroEscuela').value = "";
+      fetchOLAP();
+    }
+
+    window.onload = () => setTimeout(fetchOLAP, 200);
   </script>
 </body>
-</html>
+</html> 

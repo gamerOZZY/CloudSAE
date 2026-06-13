@@ -144,7 +144,7 @@ if($role === "gestor"){
    LOGIN DIRECTIVO
 ========================== */
 
-if($role === "directivo"){
+if($role === "administrativo"){
 
     $sql = "
     SELECT

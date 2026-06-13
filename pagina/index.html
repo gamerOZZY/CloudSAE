@@ -10,6 +10,64 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
   <style>
+
+    #preloader {
+      position: fixed;
+      inset: 0;
+      background-color: var(--black-deep);
+      z-index: 9999; 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.8s var(--ease), visibility 0.8s var(--ease);
+    }
+    @keyframes zoom-explode {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(40); 
+        opacity: 0;
+      }
+    }
+
+    .loader-logo.zoom-finish {
+      animation: zoom-explode 0.7s cubic-bezier(0.7, 0, 0.3, 1) forwards !important;
+    }
+
+    #preloader.fade-out {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loader-logo {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      animation: spin-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .loader-shape {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      border: 8px solid var(--wine-light); 
+      border-radius: 50%;
+      border-right-color: transparent;
+      border-bottom-color: transparent;
+    }
+
+    .shape-1 { top: 0; left: 0; transform: rotate(0deg); }
+    .shape-2 { top: 0; right: 0; transform: rotate(90deg); }
+    .shape-3 { bottom: 0; right: 0; transform: rotate(180deg); }
+    .shape-4 { bottom: 0; left: 0; transform: rotate(270deg); }
+
+    @keyframes spin-pulse {
+      0% { transform: rotate(0deg) scale(0.8); }
+      50% { transform: rotate(180deg) scale(1.1); }
+      100% { transform: rotate(360deg) scale(0.8); }
+    }
     /* =============================================
        1. VARIABLES CSS (Paleta de Identidad)
        ============================================= */
@@ -97,22 +155,24 @@
 
     .bg-card {
       width: 100%;
-      height: 35vh;
-      background: linear-gradient(135deg, var(--surface-2), var(--surface-0));
-      border: 1px solid var(--border-faint);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      border: 1px solid var(--border-strong);
       border-radius: 16px;
-      opacity: 0.3;
+      opacity: 0.75; 
       transition: opacity var(--slow) var(--ease);
       position: relative;
       overflow: hidden;
+      /* Un filtro para apagar los colores y mantener la estética oscura */
+      filter: grayscale(40%) contrast(1.1); 
     }
 
     .bg-card::after {
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 100% 0%, var(--wine-dark) 0%, transparent 60%);
-      opacity: 0.4;
+      background: linear-gradient(135deg, rgba(8,3,6,0.85) 0%, rgba(98,21,45,0.4) 100%);
     }
 
     @keyframes scroll-column {
@@ -186,7 +246,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Helvetica', serif;
       font-size: 24px;
       font-weight: 700;
       color: var(--wine-pale);
@@ -195,8 +255,8 @@
     }
 
     .login-title {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 36px;
+      font-family: 'Helvetica', serif;
+      font-size: 34px;
       font-weight: 600;
       color: var(--text-primary);
       line-height: 1.1;
@@ -556,7 +616,14 @@
   </style>
 </head>
 <body>
-
+<div id="preloader">
+    <div class="loader-logo">
+      <div class="loader-shape shape-1"></div>
+      <div class="loader-shape shape-2"></div>
+      <div class="loader-shape shape-3"></div>
+      <div class="loader-shape shape-4"></div>
+    </div>
+  </div>
   <div class="background-wrapper" id="bgWrapper">
     </div>
   
@@ -585,7 +652,7 @@
           <span class="role-text">Gestor</span>
         </label>
         <label class="role-option">
-          <input type="radio" name="role" value="directivo">
+          <input type="radio" name="role" value="administrativo">
           <span class="role-text">Administrativo</span>
         </label>
       </div>
@@ -642,13 +709,46 @@
         document.getElementById('selectedRole').value = radio.value;
     });
     });
-
+// Esperar a que la página cargue completamente
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const preloader = document.getElementById('preloader');
+        const loaderLogo = preloader.querySelector('.loader-logo');
+        
+        loaderLogo.classList.add('zoom-finish');
+        
+        setTimeout(() => {
+          preloader.classList.add('fade-out');
+        }, 150);
+        
+        setTimeout(() => {
+          preloader.remove();
+        }, 900);
+        
+      }, 1500); 
+    });
     document.addEventListener('DOMContentLoaded', () => {
       
       /* 1. Generación dinámica del fondo */
       const bgWrapper = document.getElementById('bgWrapper');
-      const columnsCount = 5;
-      const cardsPerColumn = 6; 
+      const columnsCount = 6;
+      const cardsPerColumn = 2; 
+      
+      const imageUrls = [
+        'https://www.escasto.ipn.mx/assets/files/escasto/img/esca-logo.png',
+        'https://upload.wikimedia.org/wikipedia/commons/d/dd/Escudo_ENMH_IPN.png',
+        'https://encb.ipn.mx/assets/files/encb/img/conocenos/escudo-encb.webp',
+        'https://www.escom.ipn.mx/images/logoESCOMBlanco.png',
+        'https://sic.cultura.gob.mx/imagenes_cache/universidad_260_i_141139.png',
+        'https://www.upiita.ipn.mx/images/logo_upiita_ipn_varios_colores_logo_upiita_oro.png',
+        'https://esit.ipn.mx/assets/files/esit/assets/uploads/esit.png',
+        'https://esfm.ipn.mx/assets/files/esfm/img/identidad/escudo-esfm.png',
+        'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjpWAsOpYXKzcbRrpNg1VG_CX07l0LCK8d4BoHCP7i7gQ0VMB1tiDLVCCqXHhagIWy3zaApKIvvBb8mG7cQv7tj0LgGyDiP1RazIJ9eyHB_GJc-TsrEIvkVKYRZwWyx3yQEnQxyZvnDF6m8/w1200-h630-p-k-no-nu/esttwitter_400x400.png'
+      ];
+      
+      const shuffledImages = [...imageUrls].sort(() => Math.random() - 0.5);
+      
+      let imgIndex = 0; 
       
       const grid = document.createElement('div');
       grid.className = 'bg-grid';
@@ -660,8 +760,15 @@
         for (let j = 0; j < cardsPerColumn; j++) {
           const card = document.createElement('div');
           card.className = 'bg-card';
+          
           const randomHeight = Math.floor(Math.random() * (45 - 25 + 1)) + 25; 
           card.style.height = `${randomHeight}vh`;
+          
+          const currentImg = shuffledImages[imgIndex % shuffledImages.length];
+          card.style.backgroundImage = `url('${currentImg}')`;
+          
+          imgIndex++;
+          
           col.appendChild(card);
         }
         col.innerHTML += col.innerHTML; 
@@ -707,7 +814,7 @@
             case 'gestor':
               usernameLabel.textContent = 'ID de Gestor o Correo Institucional';
               break;
-            case 'directivo':
+            case 'administrativo':
               usernameLabel.textContent = 'No. de Nómina o Correo Institucional';
               break;
           }
