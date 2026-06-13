@@ -168,7 +168,7 @@ if($role === "directivo"){
         $_SESSION['id_directivo'] = $usuario['id_persona'];
         $_SESSION['nombre'] = $usuario['nombre_completo'];
 
-        header("Location: dashboard_directivo.php");
+        header("Location: panel_directivo.php");
         exit();
     }
 
