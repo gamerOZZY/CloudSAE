@@ -11591,19 +11591,16 @@ VALUES
 
 
 
-
-INSERT INTO Profesor_Imparte_Materia
+INSERT IGNORE INTO Profesor_Imparte_Materia
 (id_profesor, id_materia)
 SELECT
     p.id_persona,
-    ((p.id_persona - 5001) * 2 + n.num) % 50 + 1 AS id_materia
+    FLOOR(1 + RAND(p.id_persona * 1000 + n.n) * 55)
 FROM Profesor p
-JOIN (
-    SELECT 0 AS num
-    UNION ALL
-    SELECT 1
-) n;
-
+JOIN Numeros n
+ON n.n <= (
+    2 + FLOOR(RAND(p.id_persona) * 5)
+);
 
 INSERT INTO Tiene_Inscrita
 (

@@ -102,3 +102,10 @@ CREATE TABLE Gestor_Auditoria (
     fecha_operacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_gestor) REFERENCES Gestor(id_persona) ON DELETE CASCADE
 );
+
+CREATE TEMPORARY TABLE Numeros (
+    n INT PRIMARY KEY
+);
+
+INSERT INTO Numeros VALUES
+(1),(2),(3),(4),(5),(6);
