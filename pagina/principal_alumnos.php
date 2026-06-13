@@ -456,7 +456,7 @@ $calificaciones = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </aside>
 
-    <main class="content-area">202
+    <main class="content-area">
       <div class="content-panel" id="contentPanel" aria-live="polite">
         </div>
     </main>
