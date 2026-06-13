@@ -6,7 +6,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // 2. Validación de seguridad estricta
-if(!isset($_SESSION['id_persona']) || $_SESSION['rol'] !== 'directivo'){
+if(!isset($_SESSION['id_directivo']) || $_SESSION['rol'] !== 'directivo'){
     header("Location: index.html");
     exit();
 }
