@@ -1,6 +1,12 @@
 <?php
 
 session_start();
+
+
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+
 require_once "conexion.php";
 
 $username = $_POST['username'] ?? '';
@@ -138,7 +144,7 @@ if($role === "gestor"){
    LOGIN DIRECTIVO
 ========================== */
 
-if($role === "directivo"){
+if($role === "administrativo"){
 
     $sql = "
     SELECT
@@ -168,7 +174,7 @@ if($role === "directivo"){
         $_SESSION['id_directivo'] = $usuario['id_persona'];
         $_SESSION['nombre'] = $usuario['nombre_completo'];
 
-        header("Location: dashboard_directivo.php");
+        header("Location: panel_directivo.php");
         exit();
     }
 
