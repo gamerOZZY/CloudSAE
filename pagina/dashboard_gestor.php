@@ -8,7 +8,7 @@ if(!isset($_SESSION['id_gestor'])){
 }
 
 // ==========================================
-// DECLARACIÓN DE VARIABLES (ESTRICTAMENTE ARRIBA)
+// DECLARACIÓN DE VARIABLES AL INICIO (SCOPE GLOBAL)
 // ==========================================
 $idGestor = $_SESSION['id_gestor'];
 $idEscuelaGestor = null;
@@ -26,10 +26,25 @@ $listaAlumnosBuscados = [];
 $listaProfesoresBuscados = [];
 $terminoBusquedaAlumno = "";
 $terminoBusquedaProfesor = "";
+$idAlumnoEncontrado = null;
 
 $htmlFormAlumno = "";
 $htmlFormProfesor = "";
 $htmlModificaciones = "";
+
+// Variables de uso general en los bloques lógicos
+$stmt = null;
+$stmtVal = null;
+$idPersona = null;
+$idAlumno = null;
+$idProfesor = null;
+$fotoURL = "";
+$updateFotoStr = "";
+$paramsPersona = [];
+$nuevaFotoURL = "";
+$likeQuery = "";
+$optsMat = "";
+$formId = "";
 
 // ==========================================
 // 0. VERIFICACIÓN DE IDENTIDAD Y ESCUELA
@@ -46,6 +61,23 @@ if(!$idEscuelaGestor) {
 // 1. LÓGICA DE BLOB STORAGE (AZURE)
 // ==========================================
 function subirImagenAzure($archivoTmp, $nombreArchivo, $storage_account, $container, $clave){
+    // DECLARACIÓN DE VARIABLES AL INICIO DE LA FUNCIÓN
+    $blob_url_base = "";
+    $nombre = "";
+    $url = "";
+    $contenido = "";
+    $date = "";
+    $length = 0;
+    $headers = [];
+    $resource = "";
+    $stringToSign = "";
+    $signature = "";
+    $authorization = "";
+    $ch = null;
+    $respuesta = "";
+    $httpCode = 0;
+    $curlError = "";
+
     $blob_url_base = "https://$storage_account.blob.core.windows.net/$container";
     $nombre = uniqid() . "_" . basename($nombreArchivo);
     $url = "$blob_url_base/$nombre";
@@ -107,7 +139,6 @@ if(isset($_POST['alta_alumno'])){
         $pdo->beginTransaction();
         $fotoURL = !empty($_FILES['foto']['tmp_name']) ? subirImagenAzure($_FILES['foto']['tmp_name'], $_FILES['foto']['name'], $storage_account, $container, $clave) : "";
 
-        // Insertar forzando la escuela del gestor
         $stmt = $pdo->prepare("INSERT INTO Persona (nombre_completo, contrasena, foto_perfil, id_escuela) VALUES (?,?,?,?)");
         $stmt->execute([$_POST['nombre'], $_POST['contrasena'], $fotoURL, $idEscuelaGestor]);
         $idPersona = $pdo->lastInsertId();
@@ -122,7 +153,7 @@ if(isset($_POST['alta_alumno'])){
         $stmt->execute([$idGestor, 'ALUMNO', $idPersona, 'ALTA']);
 
         $pdo->commit();
-        $mensaje = "Alumno registrado en tu escuela.";
+        $mensaje = "Alumno registrado en la institución.";
     } catch(Throwable $e) {
         $pdo->rollBack();
         $mensaje = "Error al registrar alumno: " . $e->getMessage();
@@ -131,10 +162,9 @@ if(isset($_POST['alta_alumno'])){
 
 /* --- BAJA ALUMNO --- */
 if(isset($_POST['baja_alumno'])){
-    // Validar que el alumno pertenece a la misma escuela
-    $stmt = $pdo->prepare("SELECT id_escuela FROM Persona WHERE id_persona=?");
-    $stmt->execute([$_POST['id_alumno']]);
-    if($stmt->fetchColumn() == $idEscuelaGestor){
+    $stmtVal = $pdo->prepare("SELECT id_escuela FROM Persona WHERE id_persona=?");
+    $stmtVal->execute([$_POST['id_alumno']]);
+    if($stmtVal->fetchColumn() == $idEscuelaGestor){
         $stmt = $pdo->prepare("DELETE FROM Persona WHERE id_persona=?");
         $stmt->execute([$_POST['id_alumno']]);
         $mensaje = "Alumno eliminado.";
@@ -160,7 +190,7 @@ if(isset($_POST['alta_profesor'])){
         $stmt->execute([$idPersona, $_POST['id_materia']]);
 
         $pdo->commit();
-        $mensaje = "Profesor registrado en tu escuela.";
+        $mensaje = "Profesor registrado en la institución.";
     } catch(Throwable $e) {
         $pdo->rollBack();
         $mensaje = "Error al registrar profesor: " . $e->getMessage();
@@ -169,9 +199,9 @@ if(isset($_POST['alta_profesor'])){
 
 /* --- BAJA PROFESOR --- */
 if(isset($_POST['baja_profesor'])){
-    $stmt = $pdo->prepare("SELECT id_escuela FROM Persona WHERE id_persona=?");
-    $stmt->execute([$_POST['id_profesor']]);
-    if($stmt->fetchColumn() == $idEscuelaGestor){
+    $stmtVal = $pdo->prepare("SELECT id_escuela FROM Persona WHERE id_persona=?");
+    $stmtVal->execute([$_POST['id_profesor']]);
+    if($stmtVal->fetchColumn() == $idEscuelaGestor){
         $stmt = $pdo->prepare("DELETE FROM Persona WHERE id_persona=?");
         $stmt->execute([$_POST['id_profesor']]);
         $mensaje = "Profesor eliminado.";
@@ -204,22 +234,41 @@ if(isset($_POST['actualizar_alumno'])){
             $stmt->execute([$_POST['boleta'], $_POST['edad'], $idAlumno]);
 
             // Actualizar Materia y Semestre
-            if($_POST['id_materia_nueva'] != $_POST['id_materia_original']){
-                // Intentar actualizar la llave foránea (precaución con dependencias)
-                $stmt = $pdo->prepare("UPDATE Tiene_Inscrita SET id_materia=?, grado_semestre=? WHERE id_alumno=? AND id_materia=?");
-                $stmt->execute([$_POST['id_materia_nueva'], $_POST['grado_semestre'], $idAlumno, $_POST['id_materia_original']]);
-            } else {
-                $stmt = $pdo->prepare("UPDATE Tiene_Inscrita SET grado_semestre=? WHERE id_alumno=? AND id_materia=?");
-                $stmt->execute([$_POST['grado_semestre'], $idAlumno, $_POST['id_materia_original']]);
+            if(!empty($_POST['id_materia_original'])){
+                if($_POST['id_materia_nueva'] != $_POST['id_materia_original']){
+                    $stmt = $pdo->prepare("UPDATE Tiene_Inscrita SET id_materia=?, grado_semestre=? WHERE id_alumno=? AND id_materia=?");
+                    $stmt->execute([$_POST['id_materia_nueva'], $_POST['grado_semestre'], $idAlumno, $_POST['id_materia_original']]);
+                } else {
+                    $stmt = $pdo->prepare("UPDATE Tiene_Inscrita SET grado_semestre=? WHERE id_alumno=? AND id_materia=?");
+                    $stmt->execute([$_POST['grado_semestre'], $idAlumno, $_POST['id_materia_original']]);
+                }
             }
             $pdo->commit();
             $mensaje = "Alumno actualizado correctamente.";
         } catch(Throwable $e){
             $pdo->rollBack();
-            $mensaje = "Error: " . $e->getMessage();
+            $mensaje = "Error al actualizar: " . $e->getMessage();
         }
     } else {
         $mensaje = "Infracción de seguridad detectada.";
+    }
+}
+
+/* --- INSCRIBIR MATERIA ADICIONAL --- */
+if(isset($_POST['inscribir_materia_adicional'])){
+    $idAlumno = $_POST['id_alumno'];
+    
+    $stmtVal = $pdo->prepare("SELECT id_escuela FROM Persona WHERE id_persona=?");
+    $stmtVal->execute([$idAlumno]);
+    
+    if($stmtVal->fetchColumn() == $idEscuelaGestor){
+        try {
+            $stmt = $pdo->prepare("INSERT INTO Tiene_Inscrita (id_alumno, id_materia, grado_semestre) VALUES (?,?,?)");
+            $stmt->execute([$idAlumno, $_POST['id_materia_nueva'], $_POST['grado_semestre']]);
+            $mensaje = "Nueva materia inscrita correctamente.";
+        } catch(Throwable $e){
+            $mensaje = "Error: Es posible que el alumno ya tenga inscrita esta materia.";
+        }
     }
 }
 
@@ -247,9 +296,13 @@ if(isset($_POST['actualizar_profesor'])){
             $stmt = $pdo->prepare("UPDATE Profesor SET numero_empleado=?, tipo=? WHERE id_persona=?");
             $stmt->execute([$_POST['numero_empleado'], $_POST['tipo'], $idProfesor]);
 
-            if($_POST['id_materia_nueva'] != $_POST['id_materia_original']){
+            if(!empty($_POST['id_materia_original']) && $_POST['id_materia_nueva'] != $_POST['id_materia_original']){
                 $stmt = $pdo->prepare("UPDATE Profesor_Imparte_Materia SET id_materia=? WHERE id_profesor=? AND id_materia=?");
                 $stmt->execute([$_POST['id_materia_nueva'], $idProfesor, $_POST['id_materia_original']]);
+            } else if (empty($_POST['id_materia_original'])) {
+                 // Si no tenía materia antes, insertamos una nueva
+                 $stmt = $pdo->prepare("INSERT INTO Profesor_Imparte_Materia (id_profesor, id_materia) VALUES (?,?)");
+                 $stmt->execute([$idProfesor, $_POST['id_materia_nueva']]);
             }
 
             $pdo->commit();
@@ -267,7 +320,7 @@ if(isset($_POST['actualizar_profesor'])){
 $materias = $pdo->query("SELECT id_materia, nombre FROM Materia")->fetchAll(PDO::FETCH_ASSOC);
 foreach($materias as $m) $optsMateria .= "<option value='{$m['id_materia']}'>{$m['nombre']}</option>";
 
-// Carga ultra-ligera (Solo los 10 más recientes de la escuela) para las pantallas de inicio
+// Carga de registros recientes
 $stmt = $pdo->prepare("
     SELECT a.id_persona, a.boleta, a.edad, p.nombre_completo, p.foto_perfil, 
            t.grado_semestre, t.id_materia, m.nombre as materia_nombre
@@ -325,10 +378,9 @@ if(isset($_POST['buscar_profesor'])){
 // ==========================================
 // 4. GENERACIÓN DE FORMULARIOS HTML
 // ==========================================
-// NOTA: Eliminado el select de escuelas. Se infiere del Gestor.
 $htmlFormAlumno = "
 <div class='form-container'>
-    <h3 style='margin-bottom:15px; color:var(--wine-pale); font-family:\'Cormorant Garamond\', serif; font-size:20px;'>Registrar Nuevo Alumno (Asignado a tu institución)</h3>
+    <h3 style='margin-bottom:15px; color:var(--wine-pale); font-family:\'Cormorant Garamond\', serif; font-size:20px;'>Registrar Nuevo Alumno</h3>
     <form method='POST' enctype='multipart/form-data'>
         <div class='form-grid'>
             <div class='form-group'><label>Nombre Completo</label><input type='text' name='nombre' required></div>
@@ -345,7 +397,7 @@ $htmlFormAlumno = "
 
 $htmlFormProfesor = "
 <div class='form-container'>
-    <h3 style='margin-bottom:15px; color:var(--wine-pale); font-family:\'Cormorant Garamond\', serif; font-size:20px;'>Registrar Nuevo Profesor (Asignado a tu institución)</h3>
+    <h3 style='margin-bottom:15px; color:var(--wine-pale); font-family:\'Cormorant Garamond\', serif; font-size:20px;'>Registrar Nuevo Profesor</h3>
     <form method='POST' enctype='multipart/form-data'>
         <div class='form-grid'>
             <div class='form-group'><label>Nombre Completo</label><input type='text' name='nombre' required></div>
@@ -359,18 +411,17 @@ $htmlFormProfesor = "
     </form>
 </div>";
 
-// CONSTRUCCIÓN DE LA VISTA DE MODIFICACIONES (CON BÚSQUEDA)
 $htmlModificaciones = "
-<div style='display:flex; gap:20px; margin-bottom:20px;'>
-    <div class='form-container' style='flex:1; margin-bottom:0;'>
-        <h4 style='color:var(--wine-pale);'>Buscar Alumno para Modificar</h4>
+<div style='display:flex; gap:20px; margin-bottom:20px; flex-wrap:wrap;'>
+    <div class='form-container' style='flex:1; min-width:300px; margin-bottom:0;'>
+        <h4 style='color:var(--wine-pale);'>Buscar Alumno</h4>
         <form method='POST' style='display:flex; gap:10px; margin-top:10px;'>
             <input type='text' name='termino_boleta' placeholder='Ingresa la boleta exacta' class='input-grade' style='flex:1;' value='".htmlspecialchars($terminoBusquedaAlumno)."'>
             <button type='submit' name='buscar_alumno' class='btn-save'>Buscar</button>
         </form>
     </div>
-    <div class='form-container' style='flex:1; margin-bottom:0;'>
-        <h4 style='color:var(--wine-pale);'>Buscar Profesor para Modificar</h4>
+    <div class='form-container' style='flex:1; min-width:300px; margin-bottom:0;'>
+        <h4 style='color:var(--wine-pale);'>Buscar Profesor</h4>
         <form method='POST' style='display:flex; gap:10px; margin-top:10px;'>
             <input type='text' name='termino_profesor' placeholder='Num. Empleado o Nombre' class='input-grade' style='flex:1;' value='".htmlspecialchars($terminoBusquedaProfesor)."'>
             <button type='submit' name='buscar_profesor' class='btn-save'>Buscar</button>
@@ -378,53 +429,84 @@ $htmlModificaciones = "
     </div>
 </div>";
 
-// Renderizar tabla de Alumnos Buscados
+// Tabla Alumnos
 if(!empty($listaAlumnosBuscados)){
-    $htmlModificaciones .= "<h3 style='color:var(--wine-pale); margin-bottom:15px; margin-top:30px;'>Resultados Alumnos</h3>
-    <div class='table-container' style='margin-bottom:30px; overflow:visible;'>
-    <table class='data-table'><thead><tr><th>Nueva Foto</th><th>Boleta</th><th>Nombre</th><th>Edad</th><th>Materia</th><th>Semestre</th><th>Acción</th></tr></thead><tbody>";
+    $idAlumnoEncontrado = $listaAlumnosBuscados[0]['id_persona'];
+
+    $htmlModificaciones .= "<h3 style='color:var(--wine-pale); margin-bottom:15px; margin-top:30px;'>Carga Académica del Alumno</h3>
+    <div class='table-container' style='margin-bottom:20px; overflow:visible;'>
+    <table class='data-table'><thead><tr><th>Nueva Foto</th><th>Boleta</th><th>Nombre</th><th>Edad</th><th>Materia Actual</th><th>Semestre</th><th>Acción</th></tr></thead><tbody>";
+    
     foreach($listaAlumnosBuscados as $a){
         $optsMat = str_replace("value='{$a['id_materia']}'", "value='{$a['id_materia']}' selected", $optsMateria);
-        $htmlModificaciones .= "<tr><form method='POST' enctype='multipart/form-data'>
-            <input type='hidden' name='id_alumno' value='{$a['id_persona']}'>
-            <input type='hidden' name='id_materia_original' value='{$a['id_materia']}'>
-            <td><input type='file' name='foto_nueva' accept='image/*' style='width:100px; font-size:9px;'></td>
-            <td><input type='text' name='boleta' class='input-grade' value='{$a['boleta']}' style='width:80px;'></td>
-            <td><input type='text' name='nombre' class='input-grade' value='{$a['nombre_completo']}' style='width:130px; text-align:left;'></td>
-            <td><input type='number' name='edad' class='input-grade' value='{$a['edad']}' style='width:50px;'></td>
-            <td><select name='id_materia_nueva' class='input-grade' style='width:100px;'>$optsMat</select></td>
-            <td><input type='number' name='grado_semestre' class='input-grade' value='{$a['grado_semestre']}' style='width:50px;'></td>
-            <td><button type='submit' name='actualizar_alumno' class='btn-save'>Guardar</button></td>
-        </form></tr>";
+        $formId = "form_al_" . $a['id_persona'] . "_" . ($a['id_materia'] ?: '0');
+
+        $htmlModificaciones .= "<tr>
+            <td>
+                <form id='{$formId}' method='POST' enctype='multipart/form-data'></form>
+                <input form='{$formId}' type='hidden' name='id_alumno' value='{$a['id_persona']}'>
+                <input form='{$formId}' type='hidden' name='id_materia_original' value='{$a['id_materia']}'>
+                <input form='{$formId}' type='file' name='foto_nueva' accept='image/*' style='width:100px; font-size:9px;'>
+            </td>
+            <td><input form='{$formId}' type='text' name='boleta' class='input-grade' value='{$a['boleta']}' style='width:80px;'></td>
+            <td><input form='{$formId}' type='text' name='nombre' class='input-grade' value='{$a['nombre_completo']}' style='width:130px; text-align:left;'></td>
+            <td><input form='{$formId}' type='number' name='edad' class='input-grade' value='{$a['edad']}' style='width:50px;'></td>
+            <td><select form='{$formId}' name='id_materia_nueva' class='input-grade' style='width:100px;'>$optsMat</select></td>
+            <td><input form='{$formId}' type='number' name='grado_semestre' class='input-grade' value='{$a['grado_semestre']}' style='width:50px;'></td>
+            <td><button form='{$formId}' type='submit' name='actualizar_alumno' class='btn-save'>Actualizar</button></td>
+        </tr>";
     }
     $htmlModificaciones .= "</tbody></table></div>";
+
+    $htmlModificaciones .= "
+    <div class='form-container' style='background:var(--surface-3); padding:15px; border: 1px dashed var(--border-strong);'>
+        <h4 style='color:var(--wine-pale); margin-bottom:10px; font-size:14px;'>+ Inscribir Materia Adicional</h4>
+        <form method='POST' style='display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;'>
+            <input type='hidden' name='id_alumno' value='$idAlumnoEncontrado'>
+            <div class='form-group' style='flex:1; min-width:150px;'>
+                <label>Materia Nueva</label>
+                <select name='id_materia_nueva' required>$optsMateria</select>
+            </div>
+            <div class='form-group' style='width:100px;'>
+                <label>Semestre</label>
+                <input type='number' name='grado_semestre' required value='1'>
+            </div>
+            <button type='submit' name='inscribir_materia_adicional' class='btn-save' style='padding:10px 20px; margin-bottom:2px;'>Inscribir</button>
+        </form>
+    </div>";
+
 } else if(isset($_POST['buscar_alumno'])) {
     $htmlModificaciones .= "<p style='color:var(--text-muted); margin-bottom:30px;'>No se encontraron alumnos con esa boleta en tu institución.</p>";
 }
 
-// Renderizar tabla de Profesores Buscados
+// Tabla Profesores
 if(!empty($listaProfesoresBuscados)){
-    $htmlModificaciones .= "<h3 style='color:var(--wine-pale); margin-bottom:15px;'>Resultados Profesores</h3>
+    $htmlModificaciones .= "<h3 style='color:var(--wine-pale); margin-bottom:15px;'>Materias del Profesor</h3>
     <div class='table-container' style='overflow:visible;'>
     <table class='data-table'><thead><tr><th>Nueva Foto</th><th>No. Emp</th><th>Nombre</th><th>Tipo</th><th>Materia</th><th>Acción</th></tr></thead><tbody>";
+    
     foreach($listaProfesoresBuscados as $p){
         $optsMat = str_replace("value='{$p['id_materia']}'", "value='{$p['id_materia']}' selected", $optsMateria);
-        $htmlModificaciones .= "<tr><form method='POST' enctype='multipart/form-data'>
-            <input type='hidden' name='id_profesor' value='{$p['id_persona']}'>
-            <input type='hidden' name='id_materia_original' value='{$p['id_materia']}'>
-            <td><input type='file' name='foto_nueva' accept='image/*' style='width:100px; font-size:9px;'></td>
-            <td><input type='text' name='numero_empleado' class='input-grade' value='{$p['numero_empleado']}' style='width:80px;'></td>
-            <td><input type='text' name='nombre' class='input-grade' value='{$p['nombre_completo']}' style='width:130px; text-align:left;'></td>
-            <td><input type='text' name='tipo' class='input-grade' value='{$p['tipo']}' style='width:80px;'></td>
-            <td><select name='id_materia_nueva' class='input-grade' style='width:100px;'>$optsMat</select></td>
-            <td><button type='submit' name='actualizar_profesor' class='btn-save'>Guardar</button></td>
-        </form></tr>";
+        $formId = "form_pr_" . $p['id_persona'] . "_" . ($p['id_materia'] ?: '0');
+
+        $htmlModificaciones .= "<tr>
+            <td>
+                <form id='{$formId}' method='POST' enctype='multipart/form-data'></form>
+                <input form='{$formId}' type='hidden' name='id_profesor' value='{$p['id_persona']}'>
+                <input form='{$formId}' type='hidden' name='id_materia_original' value='{$p['id_materia']}'>
+                <input form='{$formId}' type='file' name='foto_nueva' accept='image/*' style='width:100px; font-size:9px;'>
+            </td>
+            <td><input form='{$formId}' type='text' name='numero_empleado' class='input-grade' value='{$p['numero_empleado']}' style='width:80px;'></td>
+            <td><input form='{$formId}' type='text' name='nombre' class='input-grade' value='{$p['nombre_completo']}' style='width:130px; text-align:left;'></td>
+            <td><input form='{$formId}' type='text' name='tipo' class='input-grade' value='{$p['tipo']}' style='width:80px;'></td>
+            <td><select form='{$formId}' name='id_materia_nueva' class='input-grade' style='width:100px;'>$optsMat</select></td>
+            <td><button form='{$formId}' type='submit' name='actualizar_profesor' class='btn-save'>Actualizar</button></td>
+        </tr>";
     }
     $htmlModificaciones .= "</tbody></table></div>";
 } else if(isset($_POST['buscar_profesor'])) {
     $htmlModificaciones .= "<p style='color:var(--text-muted);'>No se encontraron profesores con esos datos en tu institución.</p>";
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -432,12 +514,11 @@ if(!empty($listaProfesoresBuscados)){
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel Gestor — ESCOM</title>
+  <title>Panel Gestor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
-    /* ... [AQUÍ VA EXACTAMENTE EL MISMO CSS DE TU ARCHIVO ORIGINAL] ... */
     :root {
       --wine-dark:   #62152d;   
       --wine-mid:    #952f57;   
@@ -547,7 +628,6 @@ if(!empty($listaProfesoresBuscados)){
   <div class="ticker" role="marquee">
     <div class="ticker-track">
       <span class="ticker-item"><span class="ticker-sep"></span>Operación Restringida al Entorno Institucional</span>
-      <span class="ticker-item"><span class="ticker-sep"></span>Alta de ciclo operativo (Local)</span>
       <span class="ticker-item"><span class="ticker-sep"></span>Protección Anti-IDOR Activa</span>
     </div>
   </div>
@@ -558,8 +638,8 @@ if(!empty($listaProfesoresBuscados)){
         <div class="logo-row">
           <div class="logo-mark">IPN</div>
           <div class="logo-text-wrap">
-            <div class="logo-name">ESCOM</div>
-            <div class="logo-tagline">Panel Gestor Local</div>
+            <div class="logo-name">Panel</div>
+            <div class="logo-tagline">Gestor Local</div>
           </div>
         </div>
       </div>
@@ -582,7 +662,7 @@ if(!empty($listaProfesoresBuscados)){
   <script>
     const SECTIONS = [
       {
-          tag: 'Alumnos (Vista Local)', title: 'Gestión de <em>alumnos.</em>', sqlQuery: 'INSERT / DELETE Alumno WHERE id_escuela = [Sesión]',
+          tag: 'Alumnos', title: 'Gestión de <em>alumnos.</em>', sqlQuery: 'INSERT / DELETE Alumno WHERE id_escuela = [Sesión]',
           type: 'form_table', formHtml: <?= json_encode($htmlFormAlumno) ?>,
           columns: ['Foto', 'Boleta', 'Nombre', 'Semestre', 'Materia', 'Acciones'],
           data: <?= json_encode(array_map(fn($a)=>[
@@ -592,7 +672,7 @@ if(!empty($listaProfesoresBuscados)){
           ], $listaAlumnosRecientes)) ?>
       },
       {
-          tag: 'Profesores (Vista Local)', title: 'Gestión de <em>profesores.</em>', sqlQuery: 'INSERT / DELETE Profesor WHERE id_escuela = [Sesión]',
+          tag: 'Profesores', title: 'Gestión de <em>profesores.</em>', sqlQuery: 'INSERT / DELETE Profesor WHERE id_escuela = [Sesión]',
           type: 'form_table', formHtml: <?= json_encode($htmlFormProfesor) ?>,
           columns: ['Foto', 'Empleado', 'Nombre', 'Tipo', 'Acciones'],
           data: <?= json_encode(array_map(fn($p)=>[
@@ -602,7 +682,7 @@ if(!empty($listaProfesoresBuscados)){
           ], $listaProfesoresRecientes)) ?>
       },
       {
-          tag: 'Motor de Búsqueda', title: 'Edición <em>profunda.</em>', sqlQuery: 'SELECT / UPDATE WHERE id_escuela = [Sesión] AND [Filtro]',
+          tag: 'Búsqueda', title: 'Edición <em>profunda.</em>', sqlQuery: 'SELECT / UPDATE WHERE id_escuela = [Sesión] AND [Filtro]',
           type: 'custom', customHtml: <?= json_encode($htmlModificaciones) ?>
       }
     ];
@@ -632,8 +712,7 @@ if(!empty($listaProfesoresBuscados)){
       `;
     }
 
-    // Inicializar siempre en la pestaña 2 si hubo una búsqueda POST para no perder el contexto UI
-    let currentIdx = <?= (isset($_POST['buscar_alumno']) || isset($_POST['buscar_profesor']) || isset($_POST['actualizar_alumno']) || isset($_POST['actualizar_profesor'])) ? 2 : 0 ?>; 
+    let currentIdx = <?= (isset($_POST['buscar_alumno']) || isset($_POST['buscar_profesor']) || isset($_POST['actualizar_alumno']) || isset($_POST['actualizar_profesor']) || isset($_POST['inscribir_materia_adicional'])) ? 2 : 0 ?>; 
     let isAnimating = false;
     
     function goToSection(idx) {
@@ -666,7 +745,6 @@ if(!empty($listaProfesoresBuscados)){
         if (!btn) return;
         goToSection(parseInt(btn.dataset.section, 10));
       });
-      // Forza el renderizado inicial respetando si venimos de un POST de búsqueda
       document.querySelectorAll('.nav-btn').forEach(b => { b.classList.remove('active'); });
       document.querySelector(`.nav-btn[data-section="${currentIdx}"]`).classList.add('active');
       mountSection(document.getElementById('contentPanel'), currentIdx);
