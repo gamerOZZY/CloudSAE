@@ -141,7 +141,7 @@ if($role === "gestor"){
 }
 
 /* ==========================
-   LOGIN DIRECTIVO
+   LOGIN ADMINISTRATIVO
 ========================== */
 
 if($role === "administrativo"){
