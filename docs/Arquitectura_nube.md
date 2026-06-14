@@ -26,7 +26,7 @@ flowchart TB
             end
             
             subgraph DataSubnet ["Servicios de datos"]
-                DB[(PostgreSQL Flexible Server<br/>OLTP)]
+                DB[(MySQL Flexible Server<br/>OLTP)]
                 BS[(Blob Storage)]
                 ETL[Azure Function<br/>ETL]
                 OLAP[(MySQL Flexible Server<br/>Cubo OLAP)]
@@ -95,7 +95,7 @@ Esta decisión permite desacoplar el almacenamiento de archivos del almacenamien
 
 Se utilizará Azure Functions para implementar el proceso de Extracción, Transformación y Carga (ETL) encargado de alimentar el entorno analítico del sistema. La función será ejecutada de manera programada mediante un disparador temporal (Timer Trigger), permitiendo automatizar la transferencia de información desde la base de datos transaccional hacia el repositorio analítico.
 
-Durante cada ejecución, la función extraerá los datos necesarios desde PostgreSQL Flexible Server, realizará las transformaciones requeridas para el análisis de información y cargará los resultados en la base de datos destinada al cubo OLAP.
+Durante cada ejecución, la función extraerá los datos necesarios desde MySQL Flexible Server, realizará las transformaciones requeridas para el análisis de información y cargará los resultados en la base de datos destinada al cubo OLAP.
 
 La utilización de Azure Functions permite reducir costos operativos al ejecutar recursos únicamente cuando son necesarios, además de eliminar la necesidad de mantener servidores dedicados para los procesos ETL.
 
