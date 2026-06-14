@@ -500,7 +500,7 @@ const SECTIONS = [
     title: 'Datos <em>personales.</em>',
     sqlQuery: 'SELECT datos del alumno',
     type: 'profile',
-    photo: 'https://via.placeholder.com/300x400',
+    photo: '<?= !empty($alumno["foto_perfil"]) ? $alumno["foto_perfil"] : "https://via.placeholder.com/300x400" ?>',
     data: <?= json_encode($datosPerfil) ?>
 },
 
